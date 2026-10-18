@@ -1,0 +1,11 @@
+/target
+data/raw/
+data/processed/
+*.zst
+*.bin
+!nets/*.nnue
+node_modules/
+.next/
+.env*
+.venv/
+__pycache__/
