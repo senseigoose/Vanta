@@ -40,6 +40,6 @@ fn position5() {
 
 #[test]
 fn position6() {
-    check("pos6", "r4rk1/1pp1qppp/p1np1n2/2b1pb2/2B1P3/2NP1N2/PPP1QPPP/R4RK1 w - - 0 10",
+    check("pos6", "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
           &[46, 2079, 89890, 3894594]);
 }
