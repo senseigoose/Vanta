@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 fn best(fen: &str, depth: i32) -> (String, i32) {
     let pos = Position::from_fen(fen).unwrap();
-    let mut s = Searcher::new(Arc::new(AtomicBool::new(false)));
+    let mut s = Searcher::new(Arc::new(AtomicBool::new(false)), 1);
     let limits = Limits { depth: Some(depth), ..Default::default() };
     let r = s.search(&pos, vec![pos.hash], &limits, &mut |_i: &Info| {});
     (r.best_move.unwrap().to_uci(), r.score)

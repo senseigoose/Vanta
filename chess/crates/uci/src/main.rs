@@ -3,6 +3,7 @@ use engine::search::{Info, Limits, Searcher, MATE, MAX_PLY};
 use engine::{legal_moves, perft, Move};
 use std::io::{self, BufRead};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashSet;
 use std::sync::{mpsc, Arc};
 use std::thread;
 use std::time::Instant;
@@ -11,6 +12,8 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() >= 3 && args[1] == "perft" {
         run_perft(&args);
+    } else if args.len() >= 2 && args[1] == "genbook" {
+        run_genbook(&args);
     } else {
         uci_loop();
     }
@@ -30,6 +33,51 @@ fn run_perft(args: &[String]) {
     }
     let secs = start.elapsed().as_secs_f64();
     println!("\nnodes {}  time {:.2}s  nps {:.0}", total, secs, total as f64 / secs.max(1e-9));
+}
+
+fn next_rand(x: &mut u64) -> u64 {
+    *x ^= *x << 13;
+    *x ^= *x >> 7;
+    *x ^= *x << 17;
+    *x
+}
+
+// Usage: uci genbook [count] [plies] [seed] > book.epd
+// Random openings, kept only if a depth-6 search says they are roughly balanced.
+fn run_genbook(args: &[String]) {
+    let arg = |i: usize, d: u64| args.get(i).and_then(|s| s.parse().ok()).unwrap_or(d);
+    let (count, plies) = (arg(2, 1000) as usize, arg(3, 8) as usize);
+    let mut rng = arg(4, 1).wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1;
+    let mut searcher = Searcher::new(Arc::new(AtomicBool::new(false)), 16);
+    let mut seen = HashSet::new();
+    let mut out = 0;
+    while out < count {
+        let mut pos = Position::startpos();
+        let mut ok = true;
+        for _ in 0..plies {
+            let moves = legal_moves(&pos);
+            if moves.is_empty() {
+                ok = false;
+                break;
+            }
+            pos = pos.make_move(moves[(next_rand(&mut rng) % moves.len() as u64) as usize]);
+        }
+        if !ok || legal_moves(&pos).is_empty() {
+            continue;
+        }
+        let epd = pos.to_epd();
+        if !seen.insert(epd.clone()) {
+            continue;
+        }
+        searcher.new_game();
+        let limits = Limits { depth: Some(4), ..Default::default() };
+        let r = searcher.search(&pos, vec![pos.hash], &limits, &mut |_i: &Info| {});
+        if r.score.abs() > 100 {
+            continue;
+        }
+        println!("{}", epd);
+        out += 1;
+    }
 }
 
 fn fmt_score(s: i32) -> String {
@@ -119,6 +167,7 @@ fn uci_loop() {
 
     let mut pos = Position::startpos();
     let mut history = vec![pos.hash];
+    let mut searcher = Searcher::new(stop.clone(), 16);
 
     while let Ok(line) = rx.recv() {
         let line = line.trim().to_string();
@@ -126,10 +175,21 @@ fn uci_loop() {
             "uci" => {
                 println!("id name Vanta 0.1");
                 println!("id author senseigoose");
+                println!("option name Hash type spin default 16 min 1 max 1024");
                 println!("uciok");
             }
             "isready" => println!("readyok"),
+            "setoption" => {
+                // setoption name Hash value <mb>
+                let t: Vec<&str> = line.split_whitespace().collect();
+                if t.get(2).map(|s| s.eq_ignore_ascii_case("hash")) == Some(true) {
+                    if let Some(mb) = t.get(4).and_then(|s| s.parse::<usize>().ok()) {
+                        searcher.resize_tt(mb.clamp(1, 1024));
+                    }
+                }
+            }
             "ucinewgame" => {
+                searcher.new_game();
                 pos = Position::startpos();
                 history = vec![pos.hash];
             }
@@ -141,7 +201,6 @@ fn uci_loop() {
             }
             "go" => {
                 let limits = parse_go(&line);
-                let mut searcher = Searcher::new(stop.clone());
                 let res = searcher.search(&pos, history.clone(), &limits, &mut |i: &Info| {
                     println!(
                         "info depth {} score {} nodes {} time {} nps {} pv {}",

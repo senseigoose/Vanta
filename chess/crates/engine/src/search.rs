@@ -5,6 +5,7 @@
 use crate::eval::evaluate;
 use crate::movegen::legal_moves;
 use crate::position::*;
+use crate::tt::{self, Tt};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -63,6 +64,7 @@ pub struct Searcher {
     history: Vec<u64>,
     root_pv: Option<Move>,
     root_best: Option<Move>,
+    tt: Tt,
 }
 
 /// The piece type captured by `m`, if any (handles en passant).
@@ -95,7 +97,7 @@ fn order_moves(pos: &Position, moves: &mut Vec<Move>, pv: Option<Move>) {
 }
 
 impl Searcher {
-    pub fn new(stop: Arc<AtomicBool>) -> Searcher {
+    pub fn new(stop: Arc<AtomicBool>, hash_mb: usize) -> Searcher {
         Searcher {
             nodes: 0,
             start: Instant::now(),
@@ -105,7 +107,16 @@ impl Searcher {
             history: Vec::new(),
             root_pv: None,
             root_best: None,
+            tt: Tt::new(hash_mb),
         }
+    }
+
+    pub fn resize_tt(&mut self, mb: usize) {
+        self.tt = Tt::new(mb);
+    }
+
+    pub fn new_game(&mut self) {
+        self.tt.clear();
     }
 
     /// `history` = hashes of all game positions up to and including `pos`.
@@ -213,14 +224,30 @@ impl Searcher {
             return self.quiesce(pos, alpha, beta, ply);
         }
 
+        let orig_alpha = alpha;
+        let mut tt_move = None;
+        if let Some(e) = self.tt.probe(pos.hash) {
+            tt_move = e.best_move();
+            if ply > 0 && e.depth as i32 >= depth {
+                let s = tt::from_tt_score(e.score as i32, ply);
+                match e.flag {
+                    tt::EXACT => return s,
+                    tt::LOWER if s >= beta => return s,
+                    tt::UPPER if s <= alpha => return s,
+                    _ => {}
+                }
+            }
+        }
+
         let mut moves = legal_moves(pos);
         if moves.is_empty() {
             return if in_check { -MATE + ply as i32 } else { 0 };
         }
-        let pv = if ply == 0 { self.root_pv } else { None };
-        order_moves(pos, &mut moves, pv);
+        let first = if ply == 0 { self.root_pv } else { tt_move };
+        order_moves(pos, &mut moves, first);
 
         let mut best = -INF;
+        let mut best_move: Option<Move> = None;
         for m in moves {
             let child = pos.make_move(m);
             self.history.push(child.hash);
@@ -231,6 +258,7 @@ impl Searcher {
             }
             if score > best {
                 best = score;
+                best_move = Some(m);
                 if ply == 0 {
                     self.root_best = Some(m);
                 }
@@ -242,6 +270,14 @@ impl Searcher {
                 }
             }
         }
+        let flag = if best <= orig_alpha {
+            tt::UPPER
+        } else if best >= beta {
+            tt::LOWER
+        } else {
+            tt::EXACT
+        };
+        self.tt.store(pos.hash, best_move, tt::to_tt_score(best, ply), depth, flag);
         best
     }
 

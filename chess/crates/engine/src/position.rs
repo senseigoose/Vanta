@@ -199,6 +199,56 @@ impl Position {
         self.is_attacked(self.king_sq(self.stm), self.stm ^ 1)
     }
 
+    /// EPD-style position string (board, side, castling, ep). The ep square is
+    /// only printed when a pawn can actually capture onto it.
+    pub fn to_epd(&self) -> String {
+        let mut s = String::new();
+        for rank in (0..8u8).rev() {
+            let mut empty = 0u8;
+            for file in 0..8u8 {
+                match self.piece_at(rank * 8 + file) {
+                    Some((c, pc)) => {
+                        if empty > 0 {
+                            s.push_str(&empty.to_string());
+                            empty = 0;
+                        }
+                        let ch = b"pnbrqk"[pc] as char;
+                        s.push(if c == WHITE { ch.to_ascii_uppercase() } else { ch });
+                    }
+                    None => empty += 1,
+                }
+            }
+            if empty > 0 {
+                s.push_str(&empty.to_string());
+            }
+            if rank > 0 {
+                s.push('/');
+            }
+        }
+        s.push(' ');
+        s.push(if self.stm == WHITE { 'w' } else { 'b' });
+        s.push(' ');
+        let before = s.len();
+        for (bit, ch) in [(WK, 'K'), (WQ, 'Q'), (BK, 'k'), (BQ, 'q')] {
+            if self.castling & bit != 0 {
+                s.push(ch);
+            }
+        }
+        if s.len() == before {
+            s.push('-');
+        }
+        s.push(' ');
+        let ep_ok = self.ep != NO_SQ
+            && pawn_attacks(self.stm ^ 1, self.ep) & self.pieces[PAWN] & self.colors[self.stm] != 0;
+        if ep_ok {
+            s.push((b'a' + (self.ep & 7)) as char);
+            s.push((b'1' + (self.ep >> 3)) as char);
+        } else {
+            s.push('-');
+        }
+        s
+    }
+
     /// Full recompute; used by FEN parsing and tests (make_move updates incrementally).
     pub fn compute_hash(&self) -> u64 {
         let mut h = 0u64;
