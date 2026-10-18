@@ -1,4 +1,5 @@
 use crate::bitboard::*;
+use crate::zobrist::KEYS;
 
 pub const PAWN: usize = 0;
 pub const KNIGHT: usize = 1;
@@ -51,6 +52,7 @@ pub struct Position {
     pub ep: u8, // NO_SQ if none
     pub halfmove: u32,
     pub fullmove: u32,
+    pub hash: u64,
 }
 
 fn castle_mask(sq: u8) -> u8 {
@@ -81,6 +83,7 @@ impl Position {
             ep: NO_SQ,
             halfmove: 0,
             fullmove: 1,
+            hash: 0,
         };
         let (mut file, mut rank) = (0u8, 7i8);
         for ch in board.chars() {
@@ -133,6 +136,7 @@ impl Position {
         }
         p.halfmove = it.next().and_then(|s| s.parse().ok()).unwrap_or(0);
         p.fullmove = it.next().and_then(|s| s.parse().ok()).unwrap_or(1);
+        p.hash = p.compute_hash();
         Ok(p)
     }
 
@@ -146,6 +150,7 @@ impl Position {
         let b = 1u64 << sq;
         self.pieces[piece] ^= b;
         self.colors[color] ^= b;
+        self.hash ^= KEYS.piece[color][piece][sq as usize];
     }
 
     pub fn piece_on(&self, sq: u8, color: usize) -> Option<usize> {
@@ -194,6 +199,26 @@ impl Position {
         self.is_attacked(self.king_sq(self.stm), self.stm ^ 1)
     }
 
+    /// Full recompute; used by FEN parsing and tests (make_move updates incrementally).
+    pub fn compute_hash(&self) -> u64 {
+        let mut h = 0u64;
+        for c in 0..2 {
+            for pc in 0..6 {
+                for sq in bits(self.pieces[pc] & self.colors[c]) {
+                    h ^= KEYS.piece[c][pc][sq as usize];
+                }
+            }
+        }
+        h ^= KEYS.castling[self.castling as usize];
+        if self.ep != NO_SQ {
+            h ^= KEYS.ep_file[(self.ep & 7) as usize];
+        }
+        if self.stm == BLACK {
+            h ^= KEYS.side;
+        }
+        h
+    }
+
     /// Returns the new position. Assumes `m` is pseudo-legal for the side to move.
     pub fn make_move(&self, m: Move) -> Position {
         let mut p = *self;
@@ -221,11 +246,18 @@ impl Position {
             p.toggle(us, ROOK, rt);
         }
 
+        p.hash ^= KEYS.castling[self.castling as usize];
         p.castling &= castle_mask(m.from) & castle_mask(m.to);
+        p.hash ^= KEYS.castling[p.castling as usize];
+        if self.ep != NO_SQ {
+            p.hash ^= KEYS.ep_file[(self.ep & 7) as usize];
+        }
         p.ep = NO_SQ;
         if pc == PAWN && (m.from as i8 - m.to as i8).abs() == 16 {
             p.ep = (m.from + m.to) / 2;
+            p.hash ^= KEYS.ep_file[(p.ep & 7) as usize];
         }
+        p.hash ^= KEYS.side;
         p.halfmove = if reset_half { 0 } else { self.halfmove + 1 };
         if us == BLACK {
             p.fullmove += 1;
