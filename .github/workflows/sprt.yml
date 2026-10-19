@@ -1,0 +1,87 @@
+name: SPRT
+
+# Run from the Actions tab: "SPRT" -> "Run workflow".
+# Compares the checked-out commit ("new") against a baseline tag/commit ("base").
+on:
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Baseline tag or commit (e.g. v0.2)"
+        required: true
+        default: "v0.2"
+      elo0:
+        description: "SPRT H0 (Elo)"
+        default: "0"
+      elo1:
+        description: "SPRT H1 (Elo)"
+        default: "5"
+      tc:
+        description: "Time control (fastchess format)"
+        default: "2+0.02"
+      rounds:
+        description: "Max rounds (2 games per round)"
+        default: "1500"
+
+jobs:
+  sprt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: chess
+    env:
+      FASTCHESS_TAG: v1.8.0-alpha
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history and tags, so the baseline ref can be checked out
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Cache fastchess
+        id: fc-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/fc-bin
+          key: fastchess-${{ env.FASTCHESS_TAG }}-${{ runner.os }}
+
+      - name: Build fastchess
+        if: steps.fc-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$FASTCHESS_TAG" https://github.com/Disservin/fastchess.git /tmp/fastchess
+          make -C /tmp/fastchess -j"$(nproc)"
+          mkdir -p ~/fc-bin
+          cp /tmp/fastchess/fastchess ~/fc-bin/fastchess
+
+      - name: Run SPRT
+        env:
+          BASE_REF: ${{ inputs.base_ref }}
+          ELO0: ${{ inputs.elo0 }}
+          ELO1: ${{ inputs.elo1 }}
+          TC: ${{ inputs.tc }}
+          ROUNDS: ${{ inputs.rounds }}
+        run: |
+          export PATH="$HOME/fc-bin:$PATH"
+          export CONC="$(nproc)"
+          mkdir -p tools/sprt/out
+          bash tools/sprt/run.sh "$BASE_REF" "$ELO0" "$ELO1" 2>&1 | tee tools/sprt/out/run.log
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### SPRT: $(git rev-parse --short HEAD) vs ${{ inputs.base_ref }}  (tc ${{ inputs.tc }}, [${{ inputs.elo0 }}, ${{ inputs.elo1 }}])"
+            echo '```'
+            tail -n 25 tools/sprt/out/run.log || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload games and log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sprt-results
+          path: |
+            chess/tools/sprt/out/games.pgn
+            chess/tools/sprt/out/run.log
