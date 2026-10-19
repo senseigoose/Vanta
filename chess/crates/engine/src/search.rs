@@ -75,6 +75,8 @@ pub struct Searcher {
     killers: [[Option<Move>; 2]; MAX_PLY],
     /// History heuristic: [color][from][to], bounded by gravity updates.
     quiet_hist: Vec<i32>,
+    /// Late-move reduction table: [depth][move number], built once.
+    lmr: [[i32; 64]; 64],
 }
 
 /// The piece type captured by `m`, if any (handles en passant).
@@ -123,6 +125,12 @@ fn pick_next(moves: &mut MoveList, scores: &mut [i32; MAX_MOVES], start: usize) 
 
 impl Searcher {
     pub fn new(stop: Arc<AtomicBool>, hash_mb: usize) -> Searcher {
+        let mut lmr = [[0i32; 64]; 64];
+        for d in 1..64 {
+            for m in 1..64 {
+                lmr[d][m] = (0.75 + (d as f64).ln() * (m as f64).ln() / 2.25) as i32;
+            }
+        }
         Searcher {
             nodes: 0,
             start: Instant::now(),
@@ -135,6 +143,7 @@ impl Searcher {
             tt: Tt::new(hash_mb),
             killers: [[None; 2]; MAX_PLY],
             quiet_hist: vec![0; 2 * 4096],
+            lmr,
         }
     }
 
@@ -339,7 +348,21 @@ impl Searcher {
             let is_quiet = captured(pos, m).is_none() && m.promo == 0;
             let child = pos.make_move(m);
             self.history.push(child.hash);
-            let score = -self.negamax(&child, depth - 1, -beta, -alpha, ply + 1, true);
+            let new_depth = depth - 1;
+            let mut score;
+            // Late-move reductions: moves late in the ordering are probably bad, so
+            // look at them shallower with a zero window first, and only search
+            // properly if they unexpectedly beat alpha. Never reduce in check,
+            // captures, promotions, or moves that give check.
+            if i >= 3 && depth >= 3 && is_quiet && !in_check && !child.in_check() {
+                let r = self.lmr[(depth as usize).min(63)][i.min(63)].clamp(0, new_depth - 1);
+                score = -self.negamax(&child, new_depth - r, -alpha - 1, -alpha, ply + 1, true);
+                if score > alpha {
+                    score = -self.negamax(&child, new_depth, -beta, -alpha, ply + 1, true);
+                }
+            } else {
+                score = -self.negamax(&child, new_depth, -beta, -alpha, ply + 1, true);
+            }
             self.history.pop();
             if self.aborted {
                 return 0;
