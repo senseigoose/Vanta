@@ -13,6 +13,12 @@ use std::time::Instant;
 pub const MATE: i32 = 30_000;
 pub const INF: i32 = 32_000;
 pub const MAX_PLY: usize = 128;
+const HIST_MAX: i32 = 16_384;
+
+#[inline]
+fn hist_idx(color: usize, m: Move) -> usize {
+    color * 4096 + m.from as usize * 64 + m.to as usize
+}
 
 #[derive(Default, Clone, Debug)]
 pub struct Limits {
@@ -65,6 +71,10 @@ pub struct Searcher {
     root_pv: Option<Move>,
     root_best: Option<Move>,
     tt: Tt,
+    /// Two quiet moves per ply that recently caused a beta cutoff.
+    killers: [[Option<Move>; 2]; MAX_PLY],
+    /// History heuristic: [color][from][to], bounded by gravity updates.
+    quiet_hist: Vec<i32>,
 }
 
 /// The piece type captured by `m`, if any (handles en passant).
@@ -123,6 +133,8 @@ impl Searcher {
             root_pv: None,
             root_best: None,
             tt: Tt::new(hash_mb),
+            killers: [[None; 2]; MAX_PLY],
+            quiet_hist: vec![0; 2 * 4096],
         }
     }
 
@@ -132,6 +144,34 @@ impl Searcher {
 
     pub fn new_game(&mut self) {
         self.tt.clear();
+        self.quiet_hist.iter_mut().for_each(|h| *h = 0);
+    }
+
+    fn bump_hist(&mut self, color: usize, m: Move, bonus: i32) {
+        let h = &mut self.quiet_hist[hist_idx(color, m)];
+        *h += bonus - *h * bonus.abs() / HIST_MAX;
+    }
+
+    /// Ordering for the main search: TT/PV move, captures (MVV-LVA), promotions,
+    /// killers, then quiet moves by history score.
+    fn score_moves_main(&self, pos: &Position, moves: &MoveList, first: Option<Move>, ply: usize, scores: &mut [i32; MAX_MOVES]) {
+        for i in 0..moves.len() {
+            let m = moves.get(i);
+            scores[i] = if Some(m) == first {
+                1_000_000
+            } else {
+                let s = move_score(pos, m);
+                if s != 0 {
+                    s
+                } else if Some(m) == self.killers[ply][0] {
+                    7_000
+                } else if Some(m) == self.killers[ply][1] {
+                    6_000
+                } else {
+                    self.quiet_hist[hist_idx(pos.stm, m)].clamp(-5_500, 5_500)
+                }
+            };
+        }
     }
 
     /// `history` = hashes of all game positions up to and including `pos`.
@@ -146,6 +186,7 @@ impl Searcher {
         self.start = Instant::now();
         self.aborted = false;
         self.history = history;
+        self.killers = [[None; 2]; MAX_PLY];
         self.time_limit_ms = limits.time_for(pos.stm);
 
         let root_moves = legal_moves(pos);
@@ -287,12 +328,15 @@ impl Searcher {
         }
         let first = if ply == 0 { self.root_pv } else { tt_move };
         let mut scores = [0i32; MAX_MOVES];
-        score_moves(pos, &moves, first, &mut scores);
+        self.score_moves_main(pos, &moves, first, ply, &mut scores);
 
         let mut best = -INF;
         let mut best_move: Option<Move> = None;
+        let mut quiets = [Move { from: 0, to: 0, promo: 0 }; 64];
+        let mut nq = 0usize;
         for i in 0..moves.len() {
             let (m, _) = pick_next(&mut moves, &mut scores, i);
+            let is_quiet = captured(pos, m).is_none() && m.promo == 0;
             let child = pos.make_move(m);
             self.history.push(child.hash);
             let score = -self.negamax(&child, depth - 1, -beta, -alpha, ply + 1, true);
@@ -309,9 +353,24 @@ impl Searcher {
                 if score > alpha {
                     alpha = score;
                     if alpha >= beta {
+                        if is_quiet {
+                            if self.killers[ply][0] != Some(m) {
+                                self.killers[ply][1] = self.killers[ply][0];
+                                self.killers[ply][0] = Some(m);
+                            }
+                            let bonus = (depth * depth).min(1600);
+                            self.bump_hist(pos.stm, m, bonus);
+                            for k in 0..nq {
+                                self.bump_hist(pos.stm, quiets[k], -bonus);
+                            }
+                        }
                         break;
                     }
                 }
+            }
+            if is_quiet && nq < 64 {
+                quiets[nq] = m;
+                nq += 1;
             }
         }
         let flag = if best <= orig_alpha {

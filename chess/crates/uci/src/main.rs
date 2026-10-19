@@ -199,7 +199,7 @@ fn uci_loop() {
         let line = line.trim().to_string();
         match line.split_whitespace().next().unwrap_or("") {
             "uci" => {
-                println!("id name Vanta 0.1");
+                println!("id name Vanta {}", env!("CARGO_PKG_VERSION"));
                 println!("id author senseigoose");
                 println!("option name Hash type spin default 16 min 1 max 1024");
                 println!("uciok");
