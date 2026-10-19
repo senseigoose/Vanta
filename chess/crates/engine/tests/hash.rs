@@ -2,6 +2,10 @@ use engine::{legal_moves, Position};
 
 fn walk(pos: &Position, depth: u32) {
     assert_eq!(pos.hash, pos.compute_hash(), "incremental hash drifted");
+    if !pos.in_check() {
+        let np = pos.make_null_move();
+        assert_eq!(np.hash, np.compute_hash(), "null-move hash drifted");
+    }
     if depth == 0 {
         return;
     }

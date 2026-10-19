@@ -199,6 +199,19 @@ impl Position {
         self.is_attacked(self.king_sq(self.stm), self.stm ^ 1)
     }
 
+    /// Pass the move (for null-move pruning). Never call while in check.
+    pub fn make_null_move(&self) -> Position {
+        let mut p = *self;
+        if self.ep != NO_SQ {
+            p.hash ^= KEYS.ep_file[(self.ep & 7) as usize];
+        }
+        p.ep = NO_SQ;
+        p.hash ^= KEYS.side;
+        p.stm ^= 1;
+        p.halfmove += 1;
+        p
+    }
+
     /// EPD-style position string (board, side, castling, ep). The ep square is
     /// only printed when a pawn can actually capture onto it.
     pub fn to_epd(&self) -> String {

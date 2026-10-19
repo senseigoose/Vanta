@@ -161,7 +161,7 @@ impl Searcher {
         for depth in 1..=max_depth {
             self.root_pv = best_move;
             self.root_best = None;
-            let score = self.negamax(pos, depth, -INF, INF, 0);
+            let score = self.negamax(pos, depth, -INF, INF, 0, true);
             if self.aborted {
                 break;
             }
@@ -219,7 +219,7 @@ impl Searcher {
         false
     }
 
-    fn negamax(&mut self, pos: &Position, mut depth: i32, mut alpha: i32, beta: i32, ply: usize) -> i32 {
+    fn negamax(&mut self, pos: &Position, mut depth: i32, mut alpha: i32, beta: i32, ply: usize, allow_null: bool) -> i32 {
         self.nodes += 1;
         self.check_abort();
         if self.aborted {
@@ -254,6 +254,32 @@ impl Searcher {
             }
         }
 
+        // Null-move pruning: if passing still fails high on a reduced search, the
+        // real position almost certainly does too. Skipped in check, at the root,
+        // in endgames with only pawns (zugzwang risk), near mate scores, and
+        // never twice in a row.
+        let non_pawn = pos.colors[pos.stm] & !(pos.pieces[PAWN] | pos.pieces[KING]);
+        if allow_null
+            && ply > 0
+            && !in_check
+            && depth >= 3
+            && non_pawn != 0
+            && beta.abs() < MATE - MAX_PLY as i32
+            && evaluate(pos) >= beta
+        {
+            let r = 3 + depth / 6;
+            let np = pos.make_null_move();
+            self.history.push(np.hash);
+            let score = -self.negamax(&np, depth - 1 - r, -beta, -beta + 1, ply + 1, false);
+            self.history.pop();
+            if self.aborted {
+                return 0;
+            }
+            if score >= beta {
+                return if score >= MATE - MAX_PLY as i32 { beta } else { score };
+            }
+        }
+
         let mut moves = MoveList::new();
         gen_legal(pos, &mut moves);
         if moves.is_empty() {
@@ -269,7 +295,7 @@ impl Searcher {
             let (m, _) = pick_next(&mut moves, &mut scores, i);
             let child = pos.make_move(m);
             self.history.push(child.hash);
-            let score = -self.negamax(&child, depth - 1, -beta, -alpha, ply + 1);
+            let score = -self.negamax(&child, depth - 1, -beta, -alpha, ply + 1, true);
             self.history.pop();
             if self.aborted {
                 return 0;
