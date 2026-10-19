@@ -1,7 +1,53 @@
 use crate::bitboard::*;
 use crate::position::*;
 
-fn add_pawn_move(out: &mut Vec<Move>, from: u8, to: u8, promo_rank: u8) {
+pub const MAX_MOVES: usize = 320;
+
+/// Fixed-size move buffer on the stack (no heap allocation in the hot path).
+#[derive(Clone)]
+pub struct MoveList {
+    moves: [Move; MAX_MOVES],
+    len: usize,
+}
+
+impl Default for MoveList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MoveList {
+    #[inline]
+    pub fn new() -> MoveList {
+        MoveList { moves: [Move { from: 0, to: 0, promo: 0 }; MAX_MOVES], len: 0 }
+    }
+    #[inline]
+    pub fn push(&mut self, m: Move) {
+        self.moves[self.len] = m;
+        self.len += 1;
+    }
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+    #[inline]
+    pub fn get(&self, i: usize) -> Move {
+        self.moves[i]
+    }
+    #[inline]
+    pub fn swap(&mut self, i: usize, j: usize) {
+        self.moves.swap(i, j);
+    }
+    pub fn as_slice(&self) -> &[Move] {
+        &self.moves[..self.len]
+    }
+}
+
+fn add_pawn_move(out: &mut MoveList, from: u8, to: u8, promo_rank: u8) {
     if to >> 3 == promo_rank {
         for promo in [KNIGHT, BISHOP, ROOK, QUEEN] {
             out.push(Move { from, to, promo: promo as u8 });
@@ -12,7 +58,7 @@ fn add_pawn_move(out: &mut Vec<Move>, from: u8, to: u8, promo_rank: u8) {
 }
 
 /// Pseudo-legal moves (may leave own king in check).
-pub fn pseudo_legal(pos: &Position, out: &mut Vec<Move>) {
+pub fn pseudo_legal(pos: &Position, out: &mut MoveList) {
     let us = pos.stm;
     let them = us ^ 1;
     let occ = pos.occupied();
@@ -75,26 +121,42 @@ pub fn pseudo_legal(pos: &Position, out: &mut Vec<Move>) {
     }
 }
 
-pub fn legal_moves(pos: &Position) -> Vec<Move> {
-    let mut pseudo = Vec::with_capacity(64);
-    pseudo_legal(pos, &mut pseudo);
+/// Legal moves into `out` (cleared first). Filters in place, no extra buffer.
+pub fn gen_legal(pos: &Position, out: &mut MoveList) {
+    out.len = 0;
+    pseudo_legal(pos, out);
     let us = pos.stm;
-    pseudo
-        .into_iter()
-        .filter(|&m| {
-            let child = pos.make_move(m);
-            !child.is_attacked(child.king_sq(us), us ^ 1)
-        })
-        .collect()
+    let mut j = 0;
+    for i in 0..out.len {
+        let m = out.moves[i];
+        let child = pos.make_move(m);
+        if !child.is_attacked(child.king_sq(us), us ^ 1) {
+            out.moves[j] = m;
+            j += 1;
+        }
+    }
+    out.len = j;
+}
+
+/// Convenience wrapper for non-hot paths (UCI parsing, tests, book generation).
+pub fn legal_moves(pos: &Position) -> Vec<Move> {
+    let mut list = MoveList::new();
+    gen_legal(pos, &mut list);
+    list.as_slice().to_vec()
 }
 
 pub fn perft(pos: &Position, depth: u32) -> u64 {
     if depth == 0 {
         return 1;
     }
-    let moves = legal_moves(pos);
+    let mut list = MoveList::new();
+    gen_legal(pos, &mut list);
     if depth == 1 {
-        return moves.len() as u64;
+        return list.len() as u64;
     }
-    moves.iter().map(|&m| perft(&pos.make_move(m), depth - 1)).sum()
+    let mut n = 0;
+    for i in 0..list.len() {
+        n += perft(&pos.make_move(list.get(i)), depth - 1);
+    }
+    n
 }

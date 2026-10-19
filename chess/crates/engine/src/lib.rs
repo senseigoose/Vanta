@@ -6,5 +6,5 @@ pub mod search;
 pub mod tt;
 pub mod zobrist;
 
-pub use movegen::{legal_moves, perft};
+pub use movegen::{gen_legal, legal_moves, perft, MoveList, MAX_MOVES};
 pub use position::{Move, Position};

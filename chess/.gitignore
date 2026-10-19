@@ -11,3 +11,4 @@ node_modules/
 __pycache__/
 tools/sprt/bin/
 tools/sprt/out/
+config.json

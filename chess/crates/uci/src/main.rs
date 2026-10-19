@@ -12,6 +12,8 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() >= 3 && args[1] == "perft" {
         run_perft(&args);
+    } else if args.len() >= 2 && args[1] == "bench" {
+        run_bench();
     } else if args.len() >= 2 && args[1] == "genbook" {
         run_genbook(&args);
     } else {
@@ -35,6 +37,30 @@ fn run_perft(args: &[String]) {
     println!("\nnodes {}  time {:.2}s  nps {:.0}", total, secs, total as f64 / secs.max(1e-9));
 }
 
+// Usage: uci bench   (fixed-depth searches on six positions; prints nodes and nps)
+fn run_bench() {
+    let fens = [
+        STARTPOS,
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1",
+        "r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1",
+        "rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",
+        "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
+    ];
+    let mut searcher = Searcher::new(Arc::new(AtomicBool::new(false)), 16);
+    let limits = Limits { depth: Some(6), ..Default::default() };
+    let start = Instant::now();
+    let mut nodes = 0u64;
+    for fen in fens {
+        let pos = Position::from_fen(fen).unwrap();
+        searcher.new_game();
+        let r = searcher.search(&pos, vec![pos.hash], &limits, &mut |_i: &Info| {});
+        nodes += r.nodes;
+    }
+    let ms = start.elapsed().as_millis().max(1) as u64;
+    println!("nodes {}  time {}ms  nps {}", nodes, ms, nodes * 1000 / ms);
+}
+
 fn next_rand(x: &mut u64) -> u64 {
     *x ^= *x << 13;
     *x ^= *x >> 7;
@@ -43,7 +69,7 @@ fn next_rand(x: &mut u64) -> u64 {
 }
 
 // Usage: uci genbook [count] [plies] [seed] > book.epd
-// Random openings, kept only if a depth-6 search says they are roughly balanced.
+// Random openings, kept only if a depth-4 search says they are roughly balanced.
 fn run_genbook(args: &[String]) {
     let arg = |i: usize, d: u64| args.get(i).and_then(|s| s.parse().ok()).unwrap_or(d);
     let (count, plies) = (arg(2, 1000) as usize, arg(3, 8) as usize);

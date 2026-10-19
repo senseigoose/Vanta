@@ -3,7 +3,7 @@
 //! No I/O in here (WASM-safe): progress goes out through a callback.
 
 use crate::eval::evaluate;
-use crate::movegen::legal_moves;
+use crate::movegen::{gen_legal, legal_moves, MoveList, MAX_MOVES};
 use crate::position::*;
 use crate::tt::{self, Tt};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -90,10 +90,25 @@ fn move_score(pos: &Position, m: Move) -> i32 {
     s
 }
 
-fn order_moves(pos: &Position, moves: &mut Vec<Move>, pv: Option<Move>) {
-    moves.sort_by_cached_key(|&m| {
-        if Some(m) == pv { -1_000_000 } else { -move_score(pos, m) }
-    });
+fn score_moves(pos: &Position, moves: &MoveList, first: Option<Move>, scores: &mut [i32; MAX_MOVES]) {
+    for i in 0..moves.len() {
+        let m = moves.get(i);
+        scores[i] = if Some(m) == first { 1_000_000 } else { move_score(pos, m) };
+    }
+}
+
+/// Selection step: bring the best-scored remaining move to index `start`.
+#[inline]
+fn pick_next(moves: &mut MoveList, scores: &mut [i32; MAX_MOVES], start: usize) -> (Move, i32) {
+    let mut best = start;
+    for i in start + 1..moves.len() {
+        if scores[i] > scores[best] {
+            best = i;
+        }
+    }
+    moves.swap(start, best);
+    scores.swap(start, best);
+    (moves.get(start), scores[start])
 }
 
 impl Searcher {
@@ -239,16 +254,19 @@ impl Searcher {
             }
         }
 
-        let mut moves = legal_moves(pos);
+        let mut moves = MoveList::new();
+        gen_legal(pos, &mut moves);
         if moves.is_empty() {
             return if in_check { -MATE + ply as i32 } else { 0 };
         }
         let first = if ply == 0 { self.root_pv } else { tt_move };
-        order_moves(pos, &mut moves, first);
+        let mut scores = [0i32; MAX_MOVES];
+        score_moves(pos, &moves, first, &mut scores);
 
         let mut best = -INF;
         let mut best_move: Option<Move> = None;
-        for m in moves {
+        for i in 0..moves.len() {
+            let (m, _) = pick_next(&mut moves, &mut scores, i);
             let child = pos.make_move(m);
             self.history.push(child.hash);
             let score = -self.negamax(&child, depth - 1, -beta, -alpha, ply + 1);
@@ -294,14 +312,17 @@ impl Searcher {
         if stand > alpha {
             alpha = stand;
         }
-        let mut moves: Vec<Move> = legal_moves(pos)
-            .into_iter()
-            .filter(|&m| m.promo != 0 || captured(pos, m).is_some())
-            .collect();
-        order_moves(pos, &mut moves, None);
+        let mut moves = MoveList::new();
+        gen_legal(pos, &mut moves);
+        let mut scores = [0i32; MAX_MOVES];
+        score_moves(pos, &moves, None, &mut scores);
 
         let mut best = stand;
-        for m in moves {
+        for i in 0..moves.len() {
+            let (m, sc) = pick_next(&mut moves, &mut scores, i);
+            if sc == 0 {
+                break; // only quiet moves left (captures and promotions score > 0)
+            }
             let child = pos.make_move(m);
             let score = -self.quiesce(&child, -beta, -alpha, ply + 1);
             if self.aborted {

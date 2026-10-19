@@ -60,28 +60,61 @@ pub fn pawn_attacks(color: usize, sq: u8) -> Bb {
     }
 }
 
-fn slide(sq: u8, occ: Bb, dirs: &[(i8, i8)]) -> Bb {
-    let mut out = 0u64;
-    for &(df, dr) in dirs {
-        let mut f = (sq & 7) as i8 + df;
-        let mut r = (sq >> 3) as i8 + dr;
-        while (0..8).contains(&f) && (0..8).contains(&r) {
-            let s = (r * 8 + f) as u8;
-            out |= 1u64 << s;
-            if (occ >> s) & 1 == 1 {
-                break;
+// Sliding attacks via hyperbola quintessence: no per-square ray loops and no
+// big tables, just four precomputed line masks per square. Magic bitboards
+// would be faster still; the function signatures below stay the same.
+
+/// [0] file, [1] rank, [2] diagonal (a1-h8 direction), [3] anti-diagonal,
+/// each excluding the square itself.
+static LINES: [[Bb; 64]; 4] = build_lines();
+
+const fn build_lines() -> [[Bb; 64]; 4] {
+    let mut t = [[0u64; 64]; 4];
+    let mut sq = 0usize;
+    while sq < 64 {
+        let f = (sq % 8) as i32;
+        let r = (sq / 8) as i32;
+        let mut o = 0usize;
+        while o < 64 {
+            let of = (o % 8) as i32;
+            let orr = (o / 8) as i32;
+            if o != sq {
+                let bit = 1u64 << o;
+                if of == f {
+                    t[0][sq] |= bit;
+                }
+                if orr == r {
+                    t[1][sq] |= bit;
+                }
+                if of - orr == f - r {
+                    t[2][sq] |= bit;
+                }
+                if of + orr == f + r {
+                    t[3][sq] |= bit;
+                }
             }
-            f += df;
-            r += dr;
+            o += 1;
         }
+        sq += 1;
     }
-    out
+    t
 }
 
+#[inline(always)]
+fn line_attacks(occ: Bb, sq: u8, mask: Bb) -> Bb {
+    let s = 1u64 << sq;
+    let o = occ & mask;
+    let fwd = o.wrapping_sub(s);
+    let rev = o.reverse_bits().wrapping_sub(s.reverse_bits());
+    (fwd ^ rev.reverse_bits()) & mask
+}
+
+#[inline]
 pub fn bishop_attacks(sq: u8, occ: Bb) -> Bb {
-    slide(sq, occ, &[(1, 1), (1, -1), (-1, 1), (-1, -1)])
+    line_attacks(occ, sq, LINES[2][sq as usize]) | line_attacks(occ, sq, LINES[3][sq as usize])
 }
 
+#[inline]
 pub fn rook_attacks(sq: u8, occ: Bb) -> Bb {
-    slide(sq, occ, &[(1, 0), (-1, 0), (0, 1), (0, -1)])
+    line_attacks(occ, sq, LINES[0][sq as usize]) | line_attacks(occ, sq, LINES[1][sq as usize])
 }
