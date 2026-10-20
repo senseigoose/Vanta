@@ -1,0 +1,52 @@
+name: Datagen
+
+# Actions tab -> "Datagen" -> Run workflow. Each shard is one job with its own
+# seed; results are uploaded as artifacts (zstd-compressed, kept 7 days).
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: "JSON list of shard ids (each is also its RNG seed)"
+        default: "[1,2,3,4]"
+      positions:
+        description: "Positions per shard"
+        default: "1000000"
+      nodes:
+        description: "Soft node limit per move"
+        default: "5000"
+
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(inputs.shards) }}
+    defaults:
+      run:
+        working-directory: chess
+    env:
+      POSITIONS: ${{ inputs.positions }}
+      NODES: ${{ inputs.nodes }}
+      SHARD: ${{ matrix.shard }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - name: Build
+        run: cargo build --release -p datagen
+      - name: Generate
+        run: |
+          mkdir -p data/raw
+          ./target/release/datagen data/raw "$(nproc)" "$POSITIONS" "$NODES" "$SHARD"
+      - name: Compress
+        run: |
+          zstd -T0 -3 --rm data/raw/*.bin
+          ls -la data/raw
+      - uses: actions/upload-artifact@v4
+        with:
+          name: data-shard-${{ matrix.shard }}
+          path: chess/data/raw/*.zst
+          retention-days: 7
+          compression-level: 0

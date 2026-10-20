@@ -15,4 +15,4 @@ jobs:
       - name: Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
       - name: Tests
-        run: cargo test --release -p engine
+        run: cargo test --release -p engine -p datagen

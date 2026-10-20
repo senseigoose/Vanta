@@ -29,6 +29,8 @@ pub struct Limits {
     pub winc: Option<u64>,
     pub binc: Option<u64>,
     pub movestogo: Option<u64>,
+    /// Soft node limit: stop starting new iterations past this (hard cap at 8x).
+    pub nodes: Option<u64>,
 }
 
 impl Limits {
@@ -64,6 +66,7 @@ pub struct Searcher {
     nodes: u64,
     start: Instant,
     time_limit_ms: Option<u64>,
+    node_limit: Option<u64>,
     stop: Arc<AtomicBool>,
     aborted: bool,
     /// Hashes of every position from the game start through the current node.
@@ -135,6 +138,7 @@ impl Searcher {
             nodes: 0,
             start: Instant::now(),
             time_limit_ms: None,
+            node_limit: None,
             stop,
             aborted: false,
             history: Vec::new(),
@@ -197,6 +201,7 @@ impl Searcher {
         self.history = history;
         self.killers = [[None; 2]; MAX_PLY];
         self.time_limit_ms = limits.time_for(pos.stm);
+        self.node_limit = limits.nodes;
 
         let root_moves = legal_moves(pos);
         let mut best_move = root_moves.first().copied(); // fallback if aborted immediately
@@ -228,6 +233,11 @@ impl Searcher {
             if score.abs() >= MATE - MAX_PLY as i32 {
                 break; // forced mate found
             }
+            if let Some(n) = self.node_limit {
+                if self.nodes >= n {
+                    break;
+                }
+            }
             if let Some(t) = self.time_limit_ms {
                 // Unlikely to finish the next iteration in the remaining time.
                 if self.start.elapsed().as_millis() as u64 * 2 > t {
@@ -245,6 +255,12 @@ impl Searcher {
         if self.stop.load(Ordering::Relaxed) {
             self.aborted = true;
             return;
+        }
+        if let Some(n) = self.node_limit {
+            if self.nodes >= n.saturating_mul(2) {
+                self.aborted = true;
+                return;
+            }
         }
         if let Some(t) = self.time_limit_ms {
             if self.start.elapsed().as_millis() as u64 >= t {
