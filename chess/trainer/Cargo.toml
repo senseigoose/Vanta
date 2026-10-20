@@ -1,0 +1,14 @@
+[package]
+name = "vanta-trainer"
+version = "0.1.0"
+edition = "2021"
+
+# Standalone crate: not part of the engine workspace (needs CUDA, builds on Kaggle).
+[workspace]
+
+[dependencies]
+bullet_lib = { git = "https://github.com/jw1912/bullet", package = "bullet_lib" }
+
+[features]
+# Confirm the feature name against bullet's crates/bullet_lib/Cargo.toml.
+cuda = ["bullet_lib/cuda"]
