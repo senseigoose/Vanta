@@ -121,16 +121,55 @@ pub fn pseudo_legal(pos: &Position, out: &mut MoveList) {
     }
 }
 
-/// Legal moves into `out` (cleared first). Filters in place, no extra buffer.
+/// Own pieces that are pinned to the king by an enemy slider.
+fn pinned_pieces(pos: &Position, us: usize, ksq: u8) -> Bb {
+    let them = us ^ 1;
+    let occ = pos.occupied();
+    let own = pos.colors[us];
+    let rq = (pos.pieces[ROOK] | pos.pieces[QUEEN]) & pos.colors[them];
+    let bq = (pos.pieces[BISHOP] | pos.pieces[QUEEN]) & pos.colors[them];
+    let kbit = 1u64 << ksq;
+    let rook_rays = rook_attacks(ksq, 0);
+    let mut pinned = 0u64;
+    for s in bits((rook_rays & rq) | (bishop_attacks(ksq, 0) & bq)) {
+        let sbit = 1u64 << s;
+        // Squares strictly between king and slider on their shared line.
+        let between = if (rook_rays >> s) & 1 == 1 {
+            rook_attacks(ksq, sbit) & rook_attacks(s, kbit)
+        } else {
+            bishop_attacks(ksq, sbit) & bishop_attacks(s, kbit)
+        };
+        let blockers = between & occ;
+        if blockers.count_ones() == 1 && blockers & own != 0 {
+            pinned |= blockers;
+        }
+    }
+    pinned
+}
+
+/// Legal moves into `out` (cleared first). When the king is not in check, a
+/// move by a non-king, non-pinned piece (and not en passant) cannot expose the
+/// king, so only the remaining moves need the make-move-and-test check.
 pub fn gen_legal(pos: &Position, out: &mut MoveList) {
     out.len = 0;
     pseudo_legal(pos, out);
     let us = pos.stm;
+    let ksq = pos.king_sq(us);
+    let in_check = pos.is_attacked(ksq, us ^ 1);
+    let pinned = if in_check { 0 } else { pinned_pieces(pos, us, ksq) };
+    let pawns = pos.pieces[PAWN];
     let mut j = 0;
     for i in 0..out.len {
         let m = out.moves[i];
-        let child = pos.make_move(m);
-        if !child.is_attacked(child.king_sq(us), us ^ 1) {
+        let safe = !in_check
+            && m.from != ksq
+            && (pinned >> m.from) & 1 == 0
+            && !(m.to == pos.ep && (pawns >> m.from) & 1 == 1);
+        let legal = safe || {
+            let child = pos.make_move(m);
+            !child.is_attacked(child.king_sq(us), us ^ 1)
+        };
+        if legal {
             out.moves[j] = m;
             j += 1;
         }

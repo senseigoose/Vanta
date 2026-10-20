@@ -2,6 +2,17 @@ use engine::{legal_moves, Position};
 
 fn walk(pos: &Position, depth: u32) {
     assert_eq!(pos.hash, pos.compute_hash(), "incremental hash drifted");
+    for sq in 0..64u8 {
+        let mut expected = None;
+        for c in 0..2 {
+            for pc in 0..6 {
+                if (pos.pieces[pc] & pos.colors[c]) >> sq & 1 == 1 {
+                    expected = Some((c, pc));
+                }
+            }
+        }
+        assert_eq!(pos.piece_at(sq), expected, "mailbox out of sync on square {sq}");
+    }
     if !pos.in_check() {
         let np = pos.make_null_move();
         assert_eq!(np.hash, np.compute_hash(), "null-move hash drifted");

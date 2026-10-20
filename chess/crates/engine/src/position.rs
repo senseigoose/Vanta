@@ -12,6 +12,7 @@ pub const WHITE: usize = 0;
 pub const BLACK: usize = 1;
 
 pub const NO_SQ: u8 = 64;
+const EMPTY: u8 = 0xFF;
 
 // Castling rights bits.
 pub const WK: u8 = 1;
@@ -53,6 +54,8 @@ pub struct Position {
     pub halfmove: u32,
     pub fullmove: u32,
     pub hash: u64,
+    /// Mailbox: board[sq] = color * 6 + piece, or EMPTY. Kept in sync by `toggle`.
+    board: [u8; 64],
 }
 
 fn castle_mask(sq: u8) -> u8 {
@@ -84,6 +87,7 @@ impl Position {
             halfmove: 0,
             fullmove: 1,
             hash: 0,
+            board: [EMPTY; 64],
         };
         let (mut file, mut rank) = (0u8, 7i8);
         for ch in board.chars() {
@@ -151,23 +155,27 @@ impl Position {
         self.pieces[piece] ^= b;
         self.colors[color] ^= b;
         self.hash ^= KEYS.piece[color][piece][sq as usize];
+        let code = (color * 6 + piece) as u8;
+        let slot = &mut self.board[sq as usize];
+        *slot = if *slot == code { EMPTY } else { code };
     }
 
     pub fn piece_on(&self, sq: u8, color: usize) -> Option<usize> {
-        let b = 1u64 << sq;
-        if self.colors[color] & b == 0 {
-            return None;
+        let c = self.board[sq as usize];
+        if c != EMPTY && (c / 6) as usize == color {
+            Some((c % 6) as usize)
+        } else {
+            None
         }
-        (0..6).find(|&pc| self.pieces[pc] & b != 0)
     }
 
     pub fn piece_at(&self, sq: u8) -> Option<(usize, usize)> {
-        for c in 0..2 {
-            if let Some(pc) = self.piece_on(sq, c) {
-                return Some((c, pc));
-            }
+        let c = self.board[sq as usize];
+        if c == EMPTY {
+            None
+        } else {
+            Some(((c / 6) as usize, (c % 6) as usize))
         }
-        None
     }
 
     pub fn king_sq(&self, color: usize) -> u8 {
