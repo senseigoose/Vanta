@@ -171,6 +171,7 @@ fn parse_go(line: &str) -> Limits {
             "winc" => l.winc = num(i),
             "binc" => l.binc = num(i),
             "movestogo" => l.movestogo = num(i),
+            "nodes" => l.nodes = num(i),
             _ => {}
         }
         i += 1;

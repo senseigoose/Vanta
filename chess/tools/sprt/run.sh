@@ -43,7 +43,7 @@ if [ -n "${NODES:-}" ]; then LIMIT="nodes=$NODES"; fi
 echo "== fastchess: new vs base, $LIMIT, sprt [$ELO0, $ELO1]"
 fastchess \
   -engine cmd="$BIN/new"  name=new \
-  -engine cmd="$BIN/base" name=base \
+  -engine cmd="$BIN/base" name=base ${BASE_OPTS:-} \
   -each $LIMIT proto=uci option.Hash=16 \
   -openings file="$BOOK" format=epd order=random \
   -rounds "$ROUNDS" -games 2 -repeat -concurrency "$CONC" \
