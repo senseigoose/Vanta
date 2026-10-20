@@ -8,3 +8,4 @@
 | 2026-10-19 | Null-move pruning (R=3+depth/6) | v0.3 | TC 2+0.02, [0,10] | H1 accepted, LLR 2.98, +57.1 ± 24.6 Elo, 626 games |
 | 2026-10-19 | Killer moves + history heuristic | v0.4 | TC 2+0.02, [0,5] | H1 accepted, LLR 2.96, +71.4 ± 19.2 Elo, 908 games |
 | 2026-10-19 | Late-move reductions | v0.5 | TC 2+0.02, [0,5] | H1 accepted, LLR 2.95, +33.3 ± 13.2 Elo, 1998 games |
+| 2026-10-20 | Mailbox board + pin-aware legality (speed only) | v0.6 | TC 2+0.02, [0,5] | H1 accepted, LLR 2.96, +171.4 ± 28.7 Elo, 464 games; identical node counts, 1.94x faster at depth 11 |
