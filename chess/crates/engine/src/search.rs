@@ -4,6 +4,7 @@
 
 use crate::eval::evaluate;
 use crate::movegen::{gen_legal, legal_moves, MoveList, MAX_MOVES};
+use crate::nnue::{self, Acc};
 use crate::position::*;
 use crate::tt::{self, Tt};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -14,6 +15,8 @@ pub const MATE: i32 = 30_000;
 pub const INF: i32 = 32_000;
 pub const MAX_PLY: usize = 128;
 const HIST_MAX: i32 = 16_384;
+/// NNUE output is clamped so it can never be mistaken for a mate score.
+const EVAL_CLAMP: i32 = 10_000;
 
 #[inline]
 fn hist_idx(color: usize, m: Move) -> usize {
@@ -80,6 +83,10 @@ pub struct Searcher {
     quiet_hist: Vec<i32>,
     /// Late-move reduction table: [depth][move number], built once.
     lmr: [[i32; 64]; 64],
+    /// Use the NNUE net instead of the handcrafted eval.
+    nnue: bool,
+    /// NNUE accumulators, one per ply (child = parent + move delta).
+    accs: Vec<Acc>,
 }
 
 /// The piece type captured by `m`, if any (handles en passant).
@@ -148,6 +155,39 @@ impl Searcher {
             killers: [[None; 2]; MAX_PLY],
             quiet_hist: vec![0; 2 * 4096],
             lmr,
+            nnue: false,
+            accs: vec![Acc::default(); MAX_PLY + 2],
+        }
+    }
+
+    pub fn set_nnue(&mut self, on: bool) {
+        self.nnue = on;
+    }
+
+    /// Static eval of the node at `ply` (its accumulator must be current).
+    #[inline]
+    fn eval(&self, pos: &Position, ply: usize) -> i32 {
+        if self.nnue {
+            nnue::network().evaluate(&self.accs[ply], pos.stm).clamp(-EVAL_CLAMP, EVAL_CLAMP)
+        } else {
+            evaluate(pos)
+        }
+    }
+
+    /// Prepare the accumulator for the child reached by `m` from the node at `ply`.
+    #[inline]
+    fn push_child(&mut self, pos: &Position, m: Move, ply: usize) {
+        if self.nnue {
+            let next = self.accs[ply].after_move(pos, m);
+            self.accs[ply + 1] = next;
+        }
+    }
+
+    /// A null move changes no pieces, and accumulators are per colour, so just copy.
+    #[inline]
+    fn push_null(&mut self, ply: usize) {
+        if self.nnue {
+            self.accs[ply + 1] = self.accs[ply];
         }
     }
 
@@ -202,6 +242,9 @@ impl Searcher {
         self.killers = [[None; 2]; MAX_PLY];
         self.time_limit_ms = limits.time_for(pos.stm);
         self.node_limit = limits.nodes;
+        if self.nnue {
+            self.accs[0] = Acc::from_position(pos);
+        }
 
         let root_moves = legal_moves(pos);
         let mut best_move = root_moves.first().copied(); // fallback if aborted immediately
@@ -295,7 +338,7 @@ impl Searcher {
             return 0;
         }
         if ply >= MAX_PLY {
-            return evaluate(pos);
+            return self.eval(pos, ply);
         }
         let in_check = pos.in_check();
         if in_check {
@@ -331,10 +374,11 @@ impl Searcher {
             && depth >= 3
             && non_pawn != 0
             && beta.abs() < MATE - MAX_PLY as i32
-            && evaluate(pos) >= beta
+            && self.eval(pos, ply) >= beta
         {
             let r = 3 + depth / 6;
             let np = pos.make_null_move();
+            self.push_null(ply);
             self.history.push(np.hash);
             let score = -self.negamax(&np, depth - 1 - r, -beta, -beta + 1, ply + 1, false);
             self.history.pop();
@@ -363,6 +407,7 @@ impl Searcher {
             let (m, _) = pick_next(&mut moves, &mut scores, i);
             let is_quiet = captured(pos, m).is_none() && m.promo == 0;
             let child = pos.make_move(m);
+            self.push_child(pos, m, ply);
             self.history.push(child.hash);
             let new_depth = depth - 1;
             let mut score;
@@ -429,7 +474,7 @@ impl Searcher {
         if self.aborted {
             return 0;
         }
-        let stand = evaluate(pos);
+        let stand = self.eval(pos, ply);
         if ply >= MAX_PLY || stand >= beta {
             return stand;
         }
@@ -448,6 +493,7 @@ impl Searcher {
                 break; // only quiet moves left (captures and promotions score > 0)
             }
             let child = pos.make_move(m);
+            self.push_child(pos, m, ply);
             let score = -self.quiesce(&child, -beta, -alpha, ply + 1);
             if self.aborted {
                 return 0;

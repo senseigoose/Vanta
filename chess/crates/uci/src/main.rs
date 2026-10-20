@@ -12,8 +12,10 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() >= 3 && args[1] == "perft" {
         run_perft(&args);
+    } else if args.len() >= 3 && args[1] == "evalfen" {
+        run_evalfen(&args);
     } else if args.len() >= 2 && args[1] == "bench" {
-        run_bench();
+        run_bench(&args);
     } else if args.len() >= 2 && args[1] == "genbook" {
         run_genbook(&args);
     } else {
@@ -37,8 +39,16 @@ fn run_perft(args: &[String]) {
     println!("\nnodes {}  time {:.2}s  nps {:.0}", total, secs, total as f64 / secs.max(1e-9));
 }
 
-// Usage: uci bench   (fixed-depth searches on six positions; prints nodes and nps)
-fn run_bench() {
+// Usage: uci evalfen <fen>   (prints the handcrafted and NNUE static evals, side-to-move relative)
+fn run_evalfen(args: &[String]) {
+    let fen = args[2..].join(" ");
+    let pos = Position::from_fen(&fen).expect("bad FEN");
+    println!("hce {}", engine::eval::evaluate(&pos));
+    println!("nnue {}", engine::nnue::evaluate_position(&pos));
+}
+
+// Usage: uci bench [nnue]   (fixed-depth searches on six positions; prints nodes and nps)
+fn run_bench(args: &[String]) {
     let fens = [
         STARTPOS,
         "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
@@ -48,6 +58,7 @@ fn run_bench() {
         "r4rk1/1pp1qppp/p1np1n2/2b1p1B1/2B1P1b1/P1NP1N2/1PP1QPPP/R4RK1 w - - 0 10",
     ];
     let mut searcher = Searcher::new(Arc::new(AtomicBool::new(false)), 16);
+    searcher.set_nnue(args.get(2).map(|s| s == "nnue") == Some(true));
     let limits = Limits { depth: Some(6), ..Default::default() };
     let start = Instant::now();
     let mut nodes = 0u64;
@@ -194,6 +205,7 @@ fn uci_loop() {
     let mut pos = Position::startpos();
     let mut history = vec![pos.hash];
     let mut searcher = Searcher::new(stop.clone(), 16);
+    searcher.set_nnue(true);
 
     while let Ok(line) = rx.recv() {
         let line = line.trim().to_string();
@@ -202,12 +214,18 @@ fn uci_loop() {
                 println!("id name Vanta {}", env!("CARGO_PKG_VERSION"));
                 println!("id author senseigoose");
                 println!("option name Hash type spin default 16 min 1 max 1024");
+                println!("option name UseNNUE type check default true");
                 println!("uciok");
             }
             "isready" => println!("readyok"),
             "setoption" => {
                 // setoption name Hash value <mb>
                 let t: Vec<&str> = line.split_whitespace().collect();
+                if t.get(2).map(|s| s.eq_ignore_ascii_case("usennue")) == Some(true) {
+                    if let Some(v) = t.get(4) {
+                        searcher.set_nnue(v.eq_ignore_ascii_case("true"));
+                    }
+                }
                 if t.get(2).map(|s| s.eq_ignore_ascii_case("hash")) == Some(true) {
                     if let Some(mb) = t.get(4).and_then(|s| s.parse::<usize>().ok()) {
                         searcher.resize_tt(mb.clamp(1, 1024));

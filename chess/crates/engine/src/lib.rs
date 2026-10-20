@@ -1,6 +1,7 @@
 pub mod bitboard;
 pub mod eval;
 pub mod movegen;
+pub mod nnue;
 pub mod position;
 pub mod search;
 pub mod tt;
