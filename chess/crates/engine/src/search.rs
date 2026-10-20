@@ -168,6 +168,7 @@ impl Searcher {
     #[inline]
     fn eval(&self, pos: &Position, ply: usize) -> i32 {
         if self.nnue {
+            debug_assert!(self.accs[ply].vals == Acc::from_position(pos).vals, "stale accumulator at ply {ply}");
             nnue::network().evaluate(&self.accs[ply], pos.stm).clamp(-EVAL_CLAMP, EVAL_CLAMP)
         } else {
             evaluate(pos)

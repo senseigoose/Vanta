@@ -38,11 +38,13 @@ REL="$(git rev-parse --show-prefix)"   # e.g. "chess/"
 cp /tmp/vanta_base_target/release/uci "$BIN/base"
 git worktree remove --force "$WT"
 
-echo "== fastchess: new vs base, tc=$TC, sprt [$ELO0, $ELO1]"
+LIMIT="tc=$TC"
+if [ -n "${NODES:-}" ]; then LIMIT="nodes=$NODES"; fi
+echo "== fastchess: new vs base, $LIMIT, sprt [$ELO0, $ELO1]"
 fastchess \
   -engine cmd="$BIN/new"  name=new \
   -engine cmd="$BIN/base" name=base \
-  -each tc="$TC" proto=uci option.Hash=16 \
+  -each $LIMIT proto=uci option.Hash=16 \
   -openings file="$BOOK" format=epd order=random \
   -rounds "$ROUNDS" -games 2 -repeat -concurrency "$CONC" \
   -sprt elo0="$ELO0" elo1="$ELO1" alpha=0.05 beta=0.05 \

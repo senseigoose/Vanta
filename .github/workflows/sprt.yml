@@ -21,6 +21,9 @@ on:
       rounds:
         description: "Max rounds (2 games per round)"
         default: "1500"
+      nodes:
+        description: "Fixed nodes per move (blank = use tc)"
+        default: ""
 
 jobs:
   sprt:
@@ -61,6 +64,7 @@ jobs:
           ELO1: ${{ inputs.elo1 }}
           TC: ${{ inputs.tc }}
           ROUNDS: ${{ inputs.rounds }}
+          NODES: ${{ inputs.nodes }}
         run: |
           export PATH="$HOME/fc-bin:$PATH"
           export CONC="$(nproc)"
