@@ -13,7 +13,7 @@ import subprocess
 import sys
 
 H, NIN, QA, QB, SCALE = 256, 768, 255, 64, 400
-NET = "nets/vanta-v1.nnue"
+NET = "nets/vanta-v2.nnue"
 
 FENS = [
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
