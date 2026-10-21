@@ -37,6 +37,8 @@ struct Cfg {
 struct Stats {
     positions: AtomicU64,
     games: AtomicU64,
+    /// Game-end reasons: checkmate, stalemate, 50-move, repetition, insufficient, max plies, adjudicated.
+    ends: [AtomicU64; 7],
 }
 
 struct Rng(u64);
@@ -68,7 +70,7 @@ fn insufficient_material(pos: &Position) -> bool {
 /// Returns the recorded (position, score from side to move's view) pairs and the
 /// game result from White's view (0 loss, 1 draw, 2 win), or None if the opening
 /// was rejected.
-fn play_game(searcher: &mut Searcher, rng: &mut Rng, cfg: &Cfg) -> Option<(Vec<(Position, i16)>, u8)> {
+fn play_game(searcher: &mut Searcher, rng: &mut Rng, cfg: &Cfg) -> Option<(Vec<(Position, i16)>, u8, usize)> {
     searcher.new_game();
     let mut pos = Position::startpos();
     let mut hist = vec![pos.hash];
@@ -95,18 +97,30 @@ fn play_game(searcher: &mut Searcher, rng: &mut Rng, cfg: &Cfg) -> Option<(Vec<(
     let mut streak = 0u32;
     let mut streak_sign = 0i32;
     let result: u8;
+    let reason: usize;
 
     loop {
         if legal_moves(&pos).is_empty() {
             result = if pos.in_check() {
+                reason = 0;
                 if pos.stm == WHITE { 0 } else { 2 }
             } else {
+                reason = 1;
                 1
             };
             break;
         }
         let repeats = hist.iter().filter(|&&h| h == pos.hash).count();
         if pos.halfmove >= 100 || repeats >= 3 || insufficient_material(&pos) || hist.len() > MAX_GAME_PLIES {
+            reason = if pos.halfmove >= 100 {
+                2
+            } else if repeats >= 3 {
+                3
+            } else if insufficient_material(&pos) {
+                4
+            } else {
+                5
+            };
             result = 1;
             break;
         }
@@ -126,6 +140,7 @@ fn play_game(searcher: &mut Searcher, rng: &mut Rng, cfg: &Cfg) -> Option<(Vec<(
         }
         if streak >= ADJ_PLIES {
             result = if white_score > 0 { 2 } else { 0 };
+            reason = 6;
             break;
         }
 
@@ -143,7 +158,7 @@ fn play_game(searcher: &mut Searcher, rng: &mut Rng, cfg: &Cfg) -> Option<(Vec<(
         pos = child;
         hist.push(pos.hash);
     }
-    Some((recs, result))
+    Some((recs, result, reason))
 }
 
 fn worker(id: u64, seed: u64, cfg: Arc<Cfg>, stats: Arc<Stats>, path: PathBuf) {
@@ -152,7 +167,8 @@ fn worker(id: u64, seed: u64, cfg: Arc<Cfg>, stats: Arc<Stats>, path: PathBuf) {
     searcher.set_nnue(cfg.nnue);
     let mut out = BufWriter::with_capacity(1 << 20, File::create(&path).expect("cannot create output file"));
     while stats.positions.load(Ordering::Relaxed) < cfg.target {
-        if let Some((recs, result)) = play_game(&mut searcher, &mut rng, &cfg) {
+        if let Some((recs, result, reason)) = play_game(&mut searcher, &mut rng, &cfg) {
+            stats.ends[reason].fetch_add(1, Ordering::Relaxed);
             for (pos, score) in &recs {
                 let r = if pos.stm == WHITE { result } else { 2 - result };
                 out.write_all(&format::pack(pos, *score, r)).expect("write failed");
@@ -181,7 +197,11 @@ fn main() {
     let nnue = arg(6, 0) != 0;
 
     let cfg = Arc::new(Cfg { nodes, target, nnue });
-    let stats = Arc::new(Stats { positions: AtomicU64::new(0), games: AtomicU64::new(0) });
+    let stats = Arc::new(Stats {
+        positions: AtomicU64::new(0),
+        games: AtomicU64::new(0),
+        ends: std::array::from_fn(|_| AtomicU64::new(0)),
+    });
     println!(
         "datagen: {threads} threads, target {target} positions, {nodes} nodes/move, seed {seed}, eval {}",
         if nnue { "nnue" } else { "hce" }
@@ -208,4 +228,12 @@ fn main() {
     }
     let p = stats.positions.load(Ordering::Relaxed);
     println!("done: {p} positions ({} bytes) in {:.0}s", p * 32, start.elapsed().as_secs_f64());
+    let names = ["checkmate", "stalemate", "50-move", "repetition", "insufficient", "max-plies", "adjudicated"];
+    let games = stats.games.load(Ordering::Relaxed).max(1);
+    let ends: Vec<String> = names
+        .iter()
+        .zip(stats.ends.iter())
+        .map(|(n, c)| format!("{n} {:.1}%", 100.0 * c.load(Ordering::Relaxed) as f64 / games as f64))
+        .collect();
+    println!("game ends: {}", ends.join(", "));
 }
