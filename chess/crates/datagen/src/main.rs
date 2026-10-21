@@ -2,7 +2,9 @@
 //! writes one Bullet `ChessBoard` record (32 bytes) per quiet position:
 //! position + search score + game result.
 //!
-//!   datagen <out_dir> [threads] [positions] [nodes] [seed]
+//!   datagen <out_dir> [threads] [positions] [nodes] [seed] [nnue]
+//!
+//! nnue: 0 = play and label with the handcrafted eval (default), 1 = use the NNUE net
 //!
 //! Each thread writes its own file: <out_dir>/data_s<seed>_t<thread>.bin
 
@@ -29,6 +31,7 @@ const MAX_RECORD_CP: i32 = 3000; // don't train on hopeless positions
 struct Cfg {
     nodes: u64,
     target: u64,
+    nnue: bool,
 }
 
 struct Stats {
@@ -146,6 +149,7 @@ fn play_game(searcher: &mut Searcher, rng: &mut Rng, cfg: &Cfg) -> Option<(Vec<(
 fn worker(id: u64, seed: u64, cfg: Arc<Cfg>, stats: Arc<Stats>, path: PathBuf) {
     let mut rng = Rng::new(seed.wrapping_mul(1_000_003).wrapping_add(id));
     let mut searcher = Searcher::new(Arc::new(AtomicBool::new(false)), 16);
+    searcher.set_nnue(cfg.nnue);
     let mut out = BufWriter::with_capacity(1 << 20, File::create(&path).expect("cannot create output file"));
     while stats.positions.load(Ordering::Relaxed) < cfg.target {
         if let Some((recs, result)) = play_game(&mut searcher, &mut rng, &cfg) {
@@ -163,7 +167,7 @@ fn worker(id: u64, seed: u64, cfg: Arc<Cfg>, stats: Arc<Stats>, path: PathBuf) {
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
-        eprintln!("usage: datagen <out_dir> [threads] [positions] [nodes] [seed]");
+        eprintln!("usage: datagen <out_dir> [threads] [positions] [nodes] [seed] [nnue]");
         return;
     }
     let out_dir = PathBuf::from(&args[1]);
@@ -174,10 +178,14 @@ fn main() {
     let target = arg(3, 1_000_000);
     let nodes = arg(4, 5000);
     let seed = arg(5, 1);
+    let nnue = arg(6, 0) != 0;
 
-    let cfg = Arc::new(Cfg { nodes, target });
+    let cfg = Arc::new(Cfg { nodes, target, nnue });
     let stats = Arc::new(Stats { positions: AtomicU64::new(0), games: AtomicU64::new(0) });
-    println!("datagen: {threads} threads, target {target} positions, {nodes} nodes/move, seed {seed}");
+    println!(
+        "datagen: {threads} threads, target {target} positions, {nodes} nodes/move, seed {seed}, eval {}",
+        if nnue { "nnue" } else { "hce" }
+    );
 
     let start = Instant::now();
     let handles: Vec<_> = (0..threads)

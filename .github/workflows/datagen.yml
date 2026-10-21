@@ -14,6 +14,9 @@ on:
       nodes:
         description: "Soft node limit per move"
         default: "5000"
+      nnue:
+        description: "1 = play and label with the NNUE net, 0 = handcrafted eval"
+        default: "0"
 
 jobs:
   gen:
@@ -29,6 +32,7 @@ jobs:
     env:
       POSITIONS: ${{ inputs.positions }}
       NODES: ${{ inputs.nodes }}
+      NNUE: ${{ inputs.nnue }}
       SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +43,7 @@ jobs:
       - name: Generate
         run: |
           mkdir -p data/raw
-          ./target/release/datagen data/raw "$(nproc)" "$POSITIONS" "$NODES" "$SHARD"
+          ./target/release/datagen data/raw "$(nproc)" "$POSITIONS" "$NODES" "$SHARD" "${NNUE:-0}"
       - name: Compress
         run: |
           zstd -T0 -3 --rm data/raw/*.bin
