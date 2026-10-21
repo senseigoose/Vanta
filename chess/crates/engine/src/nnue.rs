@@ -21,7 +21,7 @@ const QA: i32 = 255;
 const QB: i32 = 64;
 const SCALE: i32 = 400;
 
-static NET_BYTES: &[u8] = include_bytes!("../../../nets/vanta-v2.nnue");
+static NET_BYTES: &[u8] = include_bytes!("../../../nets/vanta-v3.nnue");
 static NET: OnceLock<Network> = OnceLock::new();
 
 pub struct Network {
