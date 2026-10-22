@@ -27,6 +27,9 @@ on:
       base_options:
         description: "Extra fastchess options for the base engine, e.g. option.UseNNUE=false"
         default: ""
+      new_options:
+        description: "Extra fastchess options for the new engine, e.g. option.RfpMargin=70"
+        default: ""
 
 jobs:
   sprt:
@@ -69,6 +72,7 @@ jobs:
           ROUNDS: ${{ inputs.rounds }}
           NODES: ${{ inputs.nodes }}
           BASE_OPTS: ${{ inputs.base_options }}
+          NEW_OPTS: ${{ inputs.new_options }}
         run: |
           export PATH="$HOME/fc-bin:$PATH"
           export CONC="$(nproc)"

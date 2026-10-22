@@ -90,6 +90,8 @@ pub struct Searcher {
     nnue: bool,
     /// NNUE accumulators, one per ply (child = parent + move delta).
     accs: Vec<Acc>,
+    /// Reverse futility pruning margin per ply (UCI option RfpMargin, for tuning).
+    rfp_margin: i32,
 }
 
 /// The piece type captured by `m`, if any (handles en passant).
@@ -160,11 +162,16 @@ impl Searcher {
             lmr,
             nnue: false,
             accs: vec![Acc::default(); MAX_PLY + 2],
+            rfp_margin: RFP_MARGIN,
         }
     }
 
     pub fn set_nnue(&mut self, on: bool) {
         self.nnue = on;
+    }
+
+    pub fn set_rfp_margin(&mut self, margin: i32) {
+        self.rfp_margin = margin;
     }
 
     /// Static eval of the node at `ply` (its accumulator must be current).
@@ -379,9 +386,9 @@ impl Searcher {
             && !in_check
             && depth <= RFP_MAX_DEPTH
             && beta.abs() < MATE - MAX_PLY as i32
-            && static_eval - RFP_MARGIN * depth >= beta
+            && static_eval - self.rfp_margin * depth >= beta
         {
-            return static_eval - RFP_MARGIN * depth;
+            return static_eval - self.rfp_margin * depth;
         }
 
         // Null-move pruning: if passing still fails high on a reduced search, the
