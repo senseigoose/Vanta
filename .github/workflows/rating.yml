@@ -1,0 +1,85 @@
+name: Rating
+
+# Run from the Actions tab: "Rating" -> "Run workflow".
+# Plays Vanta (at the chosen ref) against Stockfish at limited strength to anchor its Elo.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Vanta tag or commit to rate"
+        required: true
+        default: "main"
+      levels:
+        description: "Stockfish UCI_Elo levels, comma-separated"
+        default: "2400,2700,3000"
+      rounds:
+        description: "Rounds per level (2 games per round)"
+        default: "50"
+      tc:
+        description: "Time control (fastchess format)"
+        default: "10+0.1"
+
+jobs:
+  rating:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    defaults:
+      run:
+        working-directory: chess
+    env:
+      FASTCHESS_TAG: v1.8.0-alpha
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+
+      - name: Install Stockfish
+        run: sudo apt-get update && sudo apt-get install -y stockfish
+
+      - name: Cache fastchess
+        id: fc-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/fc-bin
+          key: fastchess-${{ env.FASTCHESS_TAG }}-${{ runner.os }}
+
+      - name: Build fastchess
+        if: steps.fc-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$FASTCHESS_TAG" https://github.com/Disservin/fastchess.git /tmp/fastchess
+          make -C /tmp/fastchess -j"$(nproc)"
+          mkdir -p ~/fc-bin
+          cp /tmp/fastchess/fastchess ~/fc-bin/fastchess
+
+      - name: Run gauntlet
+        env:
+          TC: ${{ inputs.tc }}
+          ROUNDS: ${{ inputs.rounds }}
+        run: |
+          export PATH="$HOME/fc-bin:$PATH"
+          export CONC="$(nproc)"
+          bash tools/rating/run.sh "${{ inputs.levels }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Rating: $(git rev-parse --short HEAD) (${{ inputs.ref }}), tc ${{ inputs.tc }}"
+            echo '```'
+            cat tools/rating/out/summary.txt || echo "no summary produced"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload games and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rating-results
+          path: |
+            chess/tools/rating/out/*.pgn
+            chess/tools/rating/out/*.log
+            chess/tools/rating/out/summary.txt
