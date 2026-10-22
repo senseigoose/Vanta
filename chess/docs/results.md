@@ -15,3 +15,4 @@
 | 2026-10-21 | v0.8: NNUE (768->256x2->1, vanta-v2, 48M self-play positions, wdl 0.3, 40 epochs) | v0.7 | TC 2+0.02, [0,10] | H1 accepted, LLR 2.96, +238.1 ± 56.1 Elo, LOS 100%, 200 games; ~64% of v0.7 nps at depth 14 |
 | 2026-10-21 | v0.9: build for x86-64-v3 (AVX2/BMI2) on Linux and Windows; identical nodes and score, depth-14 nps 2.0M -> 2.87M | v0.8 | TC 2+0.02, [0,10] | H1 accepted, LLR 2.95, +91.9 ± 27.9 Elo, LOS 100%, 352 games; requires an AVX2 CPU |
 | 2026-10-22 | v0.10: net vanta-v3 (same 768->256x2->1; 88M handcrafted-eval self-play positions: 48M + 40M new; wdl 0.3, 40 epochs) | v0.9 | TC 2+0.02, [0,10] | H1 accepted, LLR 2.99, +109.1 ± 34.6 Elo, LOS 100%, 342 games; same nps as v0.9 |
+| 2026-10-22 | v0.11: net vanta-v4 (same 768->256x2->1; 128M handcrafted-eval self-play positions; wdl 0.3, 40 epochs) | v0.10 | TC 2+0.02, [0,10] | H1 accepted, LLR 2.97, +27.8 ± 16.0 Elo, LOS 99.97%, 1292 games; same nps as v0.10 |
