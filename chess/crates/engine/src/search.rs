@@ -412,18 +412,30 @@ impl Searcher {
             self.history.push(child.hash);
             let new_depth = depth - 1;
             let mut score;
-            // Late-move reductions: moves late in the ordering are probably bad, so
-            // look at them shallower with a zero window first, and only search
-            // properly if they unexpectedly beat alpha. Never reduce in check,
-            // captures, promotions, or moves that give check.
-            if i >= 3 && depth >= 3 && is_quiet && !in_check && !child.in_check() {
-                let r = self.lmr[(depth as usize).min(63)][i.min(63)].clamp(0, new_depth - 1);
+            if i == 0 {
+                // First move (the expected best): full window.
+                score = -self.negamax(&child, new_depth, -beta, -alpha, ply + 1, true);
+            } else {
+                // Principal-variation search: every later move is expected to fail low,
+                // so first test it with a zero window, which is much cheaper. On top of
+                // that, late-move reductions: moves late in the ordering are probably
+                // bad, so look at them shallower too. Never reduce in check, captures,
+                // promotions, or moves that give check.
+                let r = if i >= 3 && depth >= 3 && is_quiet && !in_check && !child.in_check() {
+                    self.lmr[(depth as usize).min(63)][i.min(63)].clamp(0, new_depth - 1)
+                } else {
+                    0
+                };
                 score = -self.negamax(&child, new_depth - r, -alpha - 1, -alpha, ply + 1, true);
-                if score > alpha {
+                // A reduced move that beat alpha: confirm at full depth, still zero window.
+                if score > alpha && r > 0 {
+                    score = -self.negamax(&child, new_depth, -alpha - 1, -alpha, ply + 1, true);
+                }
+                // It really is better than the first move (and not a cut-off): re-search
+                // with the full window to get its exact score.
+                if score > alpha && score < beta {
                     score = -self.negamax(&child, new_depth, -beta, -alpha, ply + 1, true);
                 }
-            } else {
-                score = -self.negamax(&child, new_depth, -beta, -alpha, ply + 1, true);
             }
             self.history.pop();
             if self.aborted {
