@@ -31,8 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
+          fetch-depth: 0   # the dispatched branch has the scripts; the rated ref is built in a worktree
 
       - name: Rust toolchain
         run: rustup toolchain install stable --profile minimal && rustup default stable
@@ -59,6 +58,7 @@ jobs:
         env:
           TC: ${{ inputs.tc }}
           ROUNDS: ${{ inputs.rounds }}
+          VANTA_REF: ${{ inputs.ref }}
         run: |
           export PATH="$HOME/fc-bin:$PATH"
           export CONC="$(nproc)"
@@ -68,7 +68,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "### Rating: $(git rev-parse --short HEAD) (${{ inputs.ref }}), tc ${{ inputs.tc }}"
+            echo "### Rating: $(git rev-parse --short "${{ inputs.ref }}") (${{ inputs.ref }}), tc ${{ inputs.tc }}"
             echo '```'
             cat tools/rating/out/summary.txt || echo "no summary produced"
             echo '```'

@@ -3,7 +3,8 @@
 #
 #   tools/rating/run.sh "2000,2400,2800"
 #
-# Env: TC (default 10+0.1), ROUNDS per level (default 50 = 100 games), CONC (default 2),
+# Env: VANTA_REF (git tag/commit to rate, default HEAD), TC (default 10+0.1),
+#      ROUNDS per level (default 50 = 100 games), CONC (default 2),
 #      BOOK (default tools/openings/book8.epd), SF (default: stockfish on PATH or /usr/games/stockfish).
 # Needs fastchess and stockfish installed. Builds the working copy as Vanta.
 set -euo pipefail
@@ -27,9 +28,15 @@ command -v fastchess >/dev/null || { echo "fastchess not on PATH"; exit 1; }
 echo "== stockfish: $SF"
 printf 'uci\nquit\n' | "$SF" | grep -E '^id name|UCI_Elo|UCI_LimitStrength' || true
 
-echo "== building Vanta ($(git rev-parse --short HEAD))"
-cargo build --release -p uci
-cp "$CHESS_DIR/target/release/uci" "$OUT/vanta"
+VANTA_REF="${VANTA_REF:-HEAD}"
+echo "== building Vanta ($VANTA_REF = $(git rev-parse --short "$VANTA_REF"))"
+WT=/tmp/vanta_rate
+git worktree remove --force "$WT" 2>/dev/null || true
+git worktree add --detach "$WT" "$VANTA_REF"
+REL="$(git rev-parse --show-prefix)"   # e.g. "chess/"
+( cd "$WT/$REL" && CARGO_TARGET_DIR=/tmp/vanta_rate_target cargo build --release -p uci )
+cp /tmp/vanta_rate_target/release/uci "$OUT/vanta"
+git worktree remove --force "$WT"
 
 IFS=',' read -ra ELOS <<< "$LEVELS"
 for E in "${ELOS[@]}"; do
