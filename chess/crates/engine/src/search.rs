@@ -17,6 +17,9 @@ pub const MAX_PLY: usize = 128;
 const HIST_MAX: i32 = 16_384;
 /// NNUE output is clamped so it can never be mistaken for a mate score.
 const EVAL_CLAMP: i32 = 10_000;
+/// Reverse futility pruning: margin per remaining ply, and the deepest node it applies to.
+const RFP_MARGIN: i32 = 100;
+const RFP_MAX_DEPTH: i32 = 6;
 
 #[inline]
 fn hist_idx(color: usize, m: Move) -> usize {
@@ -364,6 +367,23 @@ impl Searcher {
             }
         }
 
+        // Static eval of this node, computed once for the pruning below.
+        let static_eval = if in_check { -INF } else { self.eval(pos, ply) };
+
+        // Reverse futility pruning: at shallow depth, in a node that is not on the
+        // principal variation (zero window), if the static eval is already a safe
+        // margin above beta, assume the node fails high and return early. Skipped in
+        // check, at the root, and near mate scores.
+        if beta - alpha == 1
+            && ply > 0
+            && !in_check
+            && depth <= RFP_MAX_DEPTH
+            && beta.abs() < MATE - MAX_PLY as i32
+            && static_eval - RFP_MARGIN * depth >= beta
+        {
+            return static_eval - RFP_MARGIN * depth;
+        }
+
         // Null-move pruning: if passing still fails high on a reduced search, the
         // real position almost certainly does too. Skipped in check, at the root,
         // in endgames with only pawns (zugzwang risk), near mate scores, and
@@ -375,7 +395,7 @@ impl Searcher {
             && depth >= 3
             && non_pawn != 0
             && beta.abs() < MATE - MAX_PLY as i32
-            && self.eval(pos, ply) >= beta
+            && static_eval >= beta
         {
             let r = 3 + depth / 6;
             let np = pos.make_null_move();
