@@ -20,6 +20,9 @@ const EVAL_CLAMP: i32 = 10_000;
 /// Reverse futility pruning: margin per remaining ply, and the deepest node it applies to.
 const RFP_MARGIN: i32 = 100;
 const RFP_MAX_DEPTH: i32 = 6;
+/// Futility pruning: margin per remaining ply, and the deepest node it applies to.
+const FP_MARGIN: i32 = 100;
+const FP_MAX_DEPTH: i32 = 4;
 
 #[inline]
 fn hist_idx(color: usize, m: Move) -> usize {
@@ -92,6 +95,8 @@ pub struct Searcher {
     accs: Vec<Acc>,
     /// Reverse futility pruning margin per ply (UCI option RfpMargin, for tuning).
     rfp_margin: i32,
+    /// Futility pruning margin per ply (UCI option FpMargin, for tuning).
+    fp_margin: i32,
 }
 
 /// The piece type captured by `m`, if any (handles en passant).
@@ -163,6 +168,7 @@ impl Searcher {
             nnue: false,
             accs: vec![Acc::default(); MAX_PLY + 2],
             rfp_margin: RFP_MARGIN,
+            fp_margin: FP_MARGIN,
         }
     }
 
@@ -172,6 +178,10 @@ impl Searcher {
 
     pub fn set_rfp_margin(&mut self, margin: i32) {
         self.rfp_margin = margin;
+    }
+
+    pub fn set_fp_margin(&mut self, margin: i32) {
+        self.fp_margin = margin;
     }
 
     /// Static eval of the node at `ply` (its accumulator must be current).
@@ -435,6 +445,22 @@ impl Searcher {
             let (m, _) = pick_next(&mut moves, &mut scores, i);
             let is_quiet = captured(pos, m).is_none() && m.promo == 0;
             let child = pos.make_move(m);
+            // Futility pruning: at shallow depth in a zero-window node, a quiet move that
+            // does not give check is skipped when the static eval plus a margin still
+            // cannot reach alpha. Never before the first move has been searched, never in
+            // check, at the root, or near mate scores.
+            if i > 0
+                && ply > 0
+                && is_quiet
+                && !in_check
+                && beta - alpha == 1
+                && depth <= FP_MAX_DEPTH
+                && alpha.abs() < MATE - MAX_PLY as i32
+                && static_eval + self.fp_margin * depth <= alpha
+                && !child.in_check()
+            {
+                continue;
+            }
             self.push_child(pos, m, ply);
             self.history.push(child.hash);
             let new_depth = depth - 1;
