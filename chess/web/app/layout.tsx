@@ -17,7 +17,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <span className="text-lg font-semibold tracking-tight">Vanta</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span className="size-2 rounded-full bg-amber-400" />Stub engine (WASM build pending)
+              <span className="size-2 rounded-full bg-chart-3" />Vanta and Stockfish run in your browser
             </div>
           </div>
           <span className="rounded-md border border-border px-3 py-1.5 text-sm">{VERSIONS[0].tag} · {CURRENT_NET}</span>
