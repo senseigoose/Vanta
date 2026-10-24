@@ -5,7 +5,7 @@ import type { Key } from 'chessground/types';
 import { ChevronLeft, ChevronRight, FileText, Play as PlayIcon, Pause, RotateCcw, SkipBack, SkipForward, Terminal, TrendingUp, Upload, Zap } from 'lucide-react';
 import Board from './Board';
 import { Button, Card } from './ui';
-import { engine, type Analysis } from '@/lib/engine';
+import { ENGINES, getEngine, type Analysis, type EngineId } from '@/lib/engine';
 import { DEPTH14, VERSIONS } from '@/lib/facts';
 
 const START = new Chess().fen();
@@ -37,6 +37,9 @@ export default function Play() {
   const [draft, setDraft] = useState<string | null>(null);
   const [auto, setAuto] = useState(false);
   const [error, setError] = useState('');
+  const [engineId, setEngineId] = useState<EngineId>('stockfish');
+  const [limited, setLimited] = useState(true);
+  const [elo, setElo] = useState(1800);
   const token = useRef(0);
   const file = useRef<HTMLInputElement>(null);
 
@@ -72,13 +75,22 @@ export default function Play() {
   useEffect(() => {
     const mine = ++token.current;
     setThinking(true);
-    engine.analyse(fen).then((a) => {
+    const play_ = mode === 'play';
+    getEngine(engineId).analyse(fen, {
+      movetime: play_ ? 1000 : 1500,
+      elo: play_ && limited && engineId === 'stockfish' ? elo : undefined,
+    }).then((a) => {
       if (mine !== token.current) return;
       setThinking(false);
       setInfo(a);
+      setError('');
       if (a && enginesTurn) play(a.best.slice(0, 2), a.best.slice(2, 4), a.best[4]);
+    }).catch((e) => {
+      if (mine !== token.current) return;
+      setThinking(false);
+      setError(e instanceof Error ? e.message : 'The engine failed.');
     });
-  }, [fen, enginesTurn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fen, enginesTurn, engineId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!auto) return;
@@ -128,6 +140,22 @@ export default function Play() {
             ))}
             <button role="tab" disabled title="Needs the WASM engine" className="h-7 rounded px-3 text-muted-foreground opacity-50">Engine vs engine</button>
           </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-4 rounded-md border border-border bg-card px-3 py-2 text-xs">
+          <label className="flex items-center gap-2">Engine
+            <select value={engineId} onChange={(e) => setEngineId(e.target.value as EngineId)} className="h-7 rounded border border-input bg-background px-2">
+              {ENGINES.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={limited} disabled={engineId !== 'stockfish'} onChange={(e) => setLimited(e.target.checked)} />
+            Limit strength (Human vs engine)
+          </label>
+          <label className="flex items-center gap-2">Elo
+            <input type="range" min={1320} max={3190} step={10} value={elo} disabled={engineId !== 'stockfish' || !limited} onChange={(e) => setElo(Number(e.target.value))} />
+            <span className="w-10 tabular-nums">{elo}</span>
+          </label>
         </div>
 
         <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -202,7 +230,7 @@ export default function Play() {
               <div className="text-xs font-medium">Principal variation</div>
               <p className="mt-2 font-mono text-[11px] leading-5 text-muted-foreground">{pv.join(' ') || '–'}</p>
             </div>
-            <p className="mt-4 text-[11px] text-muted-foreground">{engine.name}. Candidate moves need MultiPV, which is not built yet.</p>
+            <p className="mt-4 text-[11px] text-muted-foreground">{getEngine(engineId).name}. Candidate moves need MultiPV, which is not built yet.</p>
           </Card>
         </div>
       </section>
@@ -233,7 +261,7 @@ export default function Play() {
           <div className="mt-4 space-y-3 text-xs">
             <div><div className="mb-1 flex justify-between"><span>Search speed (native)</span><span>3.3M nodes/s</span></div><div className="h-1 rounded-full bg-muted"><div className="h-full w-[80%] rounded-full bg-primary" /></div></div>
             <div className="flex justify-between"><span>Move generator</span><span className="flex items-center gap-2"><span className="size-2 rounded-full bg-chart-2" />perft verified</span></div>
-            <div className="flex justify-between"><span>Browser engine</span><span className="flex items-center gap-2"><span className="size-2 rounded-full bg-chart-3" />stub for now</span></div>
+            <div className="flex justify-between"><span>Browser engine</span><span className="flex items-center gap-2"><span className="size-2 rounded-full bg-chart-3" />{engineId === 'stockfish' ? 'Stockfish (Vanta WASM not built)' : 'stub'}</span></div>
           </div>
         </Card>
       </aside>
