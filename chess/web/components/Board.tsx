@@ -4,6 +4,7 @@ import { Chessground } from 'chessground';
 import type { Api } from 'chessground/api';
 import type { Key } from 'chessground/types';
 import 'chessground/assets/chessground.base.css';
+import 'chessground/assets/chessground.cburnett.css';
 
 type Props = {
   fen: string;
@@ -39,5 +40,5 @@ export default function Board({ fen, orientation, turn, check, lastMove, movable
     });
   }, [fen, orientation, turn, check, lastMove, movable, dests]);
 
-  return <div className="board relative aspect-square w-full" ref={el} />;
+  return <div className="board" ref={el} />;
 }
