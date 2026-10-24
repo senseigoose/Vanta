@@ -48,6 +48,7 @@ export const GAME_ENDS = [
 ] as const;
 
 export const EXPERIMENTS = [
+  { what: 'Futility margin 60 and 150 (two runs, order not recorded)', vs: 'margin 100', elo: -4.9, err: 9.4, games: 6000, outcome: 'Inconclusive', ref: 'untagged' },
   { what: 'Futility pruning (depth ≤ 4, margin 100)', vs: 'v0.12', elo: 6.7, err: 9.6, games: 3000, outcome: 'Inconclusive', ref: 'untagged' },
   { what: 'RFP margin 140 (UCI option)', vs: 'margin 100', elo: -6.5, err: 9.4, games: 3000, outcome: 'Inconclusive', ref: 'untagged' },
   { what: 'RFP margin 70 (UCI option)', vs: 'margin 100', elo: 4.2, err: 9.6, games: 3000, outcome: 'Inconclusive', ref: 'untagged' },
