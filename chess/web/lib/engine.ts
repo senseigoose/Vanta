@@ -11,9 +11,10 @@ export interface Engine {
   analyse(fen: string, opts?: SearchOpts): Promise<Analysis | null>;
 }
 
-export type EngineId = 'stockfish' | 'stub';
+export type EngineId = 'stockfish' | 'vanta' | 'stub';
 export const ENGINES: { id: EngineId; label: string }[] = [
   { id: 'stockfish', label: 'Stockfish (WASM)' },
+  { id: 'vanta', label: 'Vanta (WASM)' },
   { id: 'stub', label: 'Stub (random move)' },
 ];
 
@@ -129,9 +130,77 @@ class StockfishEngine implements Engine {
   }
 }
 
+// Vanta compiled to WebAssembly (crates/wasm), run in a module Web Worker (public/vanta/worker.js).
+// A running search cannot be interrupted, so every request carries a movetime; a newer request
+// simply makes the older answer stale (it resolves to null).
+class VantaEngine implements Engine {
+  name = 'Vanta (WASM)';
+  private ready: Promise<Worker> | null = null;
+  private chain: Promise<unknown> = Promise.resolve();
+  private seq = 0;
+
+  private start(): Promise<Worker> {
+    if (!this.ready) {
+      this.ready = (async () => {
+        const res = await fetch('/vanta/manifest.json');
+        if (!res.ok) throw new Error('Vanta WASM is not built yet. Run chess/scripts/build-wasm.sh and commit web/public/vanta.');
+        const man = (await res.json()) as { net: string };
+        const w = new Worker('/vanta/worker.js', { type: 'module' });
+        await new Promise<void>((resolve, reject) => {
+          const done = (fn: () => void) => { w.removeEventListener('message', onMsg); w.removeEventListener('error', onErr); clearTimeout(t); fn(); };
+          const onMsg = (e: MessageEvent) => {
+            if (e.data?.type === 'ready') done(resolve);
+            else if (e.data?.type === 'error') done(() => reject(new Error(e.data.message)));
+          };
+          const onErr = () => done(() => reject(new Error('The Vanta worker failed to start (is this browser too old for module workers?).')));
+          const t = setTimeout(() => done(() => reject(new Error('Vanta did not start in time.'))), 30000);
+          w.addEventListener('message', onMsg);
+          w.addEventListener('error', onErr);
+          w.postMessage({ type: 'init', net: man.net });
+        });
+        return w;
+      })();
+      this.ready.catch(() => { this.ready = null; });
+    }
+    return this.ready;
+  }
+
+  analyse(fen: string, opts: SearchOpts = {}): Promise<Analysis | null> {
+    const mine = ++this.seq;
+    const run = this.chain.then(() => this.search(fen, opts, mine));
+    this.chain = run.catch(() => null);
+    return run;
+  }
+
+  private async search(fen: string, opts: SearchOpts, mine: number): Promise<Analysis | null> {
+    if (mine !== this.seq) return null;
+    const w = await this.start();
+    if (mine !== this.seq) return null;
+    const sign = fen.split(' ')[1] === 'b' ? -1 : 1;
+    return new Promise<Analysis | null>((resolve, reject) => {
+      const onMsg = (e: MessageEvent) => {
+        const d = e.data;
+        if (!d || d.id !== mine) return;
+        if (d.type === 'done') {
+          w.removeEventListener('message', onMsg);
+          const r = d.result as { best: string; score: number; mate: number; depth: number; nodes: number };
+          if (!r.best || r.best === '0000') return resolve(null);
+          const stm = r.mate ? (r.mate > 0 ? 10000 - r.mate : -10000 - r.mate) : r.score;
+          resolve({ best: r.best, cp: sign * stm, depth: r.depth, nodes: r.nodes, pv: [r.best] });
+        } else if (d.type === 'error') {
+          w.removeEventListener('message', onMsg);
+          reject(new Error(d.message));
+        }
+      };
+      w.addEventListener('message', onMsg);
+      w.postMessage({ type: 'go', id: mine, fen, movetime: opts.movetime ?? 1000 });
+    });
+  }
+}
+
 const instances: Partial<Record<EngineId, Engine>> = {};
 export function getEngine(id: EngineId): Engine {
-  return (instances[id] ??= id === 'stockfish' ? new StockfishEngine() : new StubEngine());
+  return (instances[id] ??= id === 'stockfish' ? new StockfishEngine() : id === 'vanta' ? new VantaEngine() : new StubEngine());
 }
 
 export const engine: Engine = getEngine('stub');

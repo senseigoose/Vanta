@@ -261,7 +261,7 @@ export default function Play() {
           <div className="mt-4 space-y-3 text-xs">
             <div><div className="mb-1 flex justify-between"><span>Search speed (native)</span><span>3.3M nodes/s</span></div><div className="h-1 rounded-full bg-muted"><div className="h-full w-[80%] rounded-full bg-primary" /></div></div>
             <div className="flex justify-between"><span>Move generator</span><span className="flex items-center gap-2"><span className="size-2 rounded-full bg-chart-2" />perft verified</span></div>
-            <div className="flex justify-between"><span>Browser engine</span><span className="flex items-center gap-2"><span className="size-2 rounded-full bg-chart-3" />{engineId === 'stockfish' ? 'Stockfish (Vanta WASM not built)' : 'stub'}</span></div>
+            <div className="flex justify-between"><span>Browser engine</span><span className="flex items-center gap-2"><span className="size-2 rounded-full bg-chart-3" />{ENGINES.find((x) => x.id === engineId)?.label}</span></div>
           </div>
         </Card>
       </aside>
