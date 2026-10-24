@@ -4,6 +4,7 @@ pub mod movegen;
 pub mod nnue;
 pub mod position;
 pub mod search;
+pub mod see;
 pub mod tt;
 pub mod zobrist;
 

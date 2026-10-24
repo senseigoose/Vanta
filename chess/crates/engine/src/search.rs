@@ -6,6 +6,7 @@ use crate::eval::evaluate;
 use crate::movegen::{gen_legal, legal_moves, MoveList, MAX_MOVES};
 use crate::nnue::{self, Acc};
 use crate::position::*;
+use crate::see::see_ge;
 use crate::tt::{self, Tt};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -101,6 +102,10 @@ pub struct Searcher {
     rfp_margin: i32,
     /// Futility pruning margin per ply (UCI option FpMargin, for tuning).
     fp_margin: i32,
+    /// Skip losing captures (SEE < 0) in quiescence (UCI option SeeQs).
+    see_qs: bool,
+    /// Order losing captures after the quiet moves in the main search (UCI option SeeOrder).
+    see_order: bool,
 }
 
 /// The piece type captured by `m`, if any (handles en passant).
@@ -173,6 +178,8 @@ impl Searcher {
             accs: vec![Acc::default(); MAX_PLY + 2],
             rfp_margin: RFP_MARGIN,
             fp_margin: FP_MARGIN,
+            see_qs: false,
+            see_order: false,
         }
     }
 
@@ -186,6 +193,14 @@ impl Searcher {
 
     pub fn set_fp_margin(&mut self, margin: i32) {
         self.fp_margin = margin;
+    }
+
+    pub fn set_see_qs(&mut self, on: bool) {
+        self.see_qs = on;
+    }
+
+    pub fn set_see_order(&mut self, on: bool) {
+        self.see_order = on;
     }
 
     /// Static eval of the node at `ply` (its accumulator must be current).
@@ -238,8 +253,12 @@ impl Searcher {
             scores[i] = if Some(m) == first {
                 1_000_000
             } else {
-                let s = move_score(pos, m);
+                let mut s = move_score(pos, m);
                 if s != 0 {
+                    // A capture (no promotion) that loses material goes after every quiet move.
+                    if self.see_order && m.promo == 0 && !see_ge(pos, m, 0) {
+                        s -= 30_000;
+                    }
                     s
                 } else if Some(m) == self.killers[ply][0] {
                     7_000
@@ -593,6 +612,9 @@ impl Searcher {
             let (m, sc) = pick_next(&mut moves, &mut scores, i);
             if sc == 0 {
                 break; // only quiet moves left (captures and promotions score > 0)
+            }
+            if self.see_qs && m.promo == 0 && !see_ge(pos, m, 0) {
+                continue; // losing capture: not worth searching in quiescence
             }
             let child = pos.make_move(m);
             self.push_child(pos, m, ply);

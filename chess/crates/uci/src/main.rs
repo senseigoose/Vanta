@@ -218,6 +218,8 @@ fn uci_loop() {
                 println!("option name UseNNUE type check default true");
                 println!("option name RfpMargin type spin default 100 min 0 max 400");
                 println!("option name FpMargin type spin default 100 min 0 max 400");
+                println!("option name SeeQs type check default false");
+                println!("option name SeeOrder type check default false");
                 println!("uciok");
             }
             "isready" => println!("readyok"),
@@ -237,6 +239,16 @@ fn uci_loop() {
                 if t.get(2).map(|s| s.eq_ignore_ascii_case("fpmargin")) == Some(true) {
                     if let Some(m) = t.get(4).and_then(|v| v.parse::<i32>().ok()) {
                         searcher.set_fp_margin(m.clamp(0, 400));
+                    }
+                }
+                if t.get(2).map(|s| s.eq_ignore_ascii_case("seeqs")) == Some(true) {
+                    if let Some(v) = t.get(4) {
+                        searcher.set_see_qs(v.eq_ignore_ascii_case("true"));
+                    }
+                }
+                if t.get(2).map(|s| s.eq_ignore_ascii_case("seeorder")) == Some(true) {
+                    if let Some(v) = t.get(4) {
+                        searcher.set_see_order(v.eq_ignore_ascii_case("true"));
                     }
                 }
                 if t.get(2).map(|s| s.eq_ignore_ascii_case("hash")) == Some(true) {
