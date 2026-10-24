@@ -9,7 +9,8 @@
 //!
 //! Accumulators are kept per *colour* (white's view, black's view), so a null
 //! move needs no update, and the side to move picks "us"/"them" at eval time.
-//! The net is embedded at compile time: no file I/O, WASM-safe.
+//! The net is embedded at compile time (feature `embedded-net`, on by default), or
+//! handed in as bytes with `load_network` (WASM build). No file I/O either way.
 
 use crate::bitboard::bits;
 use crate::position::*;
@@ -21,6 +22,7 @@ const QA: i32 = 255;
 const QB: i32 = 64;
 const SCALE: i32 = 400;
 
+#[cfg(feature = "embedded-net")]
 static NET_BYTES: &[u8] = include_bytes!("../../../nets/vanta-v4.nnue");
 static NET: OnceLock<Network> = OnceLock::new();
 
@@ -32,20 +34,35 @@ pub struct Network {
     ob: i16,
 }
 
+#[cfg(feature = "embedded-net")]
 pub fn network() -> &'static Network {
-    NET.get_or_init(|| Network::parse(NET_BYTES))
+    NET.get_or_init(|| Network::parse(NET_BYTES).expect("embedded net is valid"))
+}
+
+#[cfg(not(feature = "embedded-net"))]
+pub fn network() -> &'static Network {
+    NET.get().expect("no net loaded: call nnue::load_network first")
+}
+
+/// Load a net from the bytes of a .nnue file. Only the first successful call has
+/// any effect (the net is set once per process); later calls just validate.
+pub fn load_network(bytes: &[u8]) -> Result<(), String> {
+    let net = Network::parse(bytes)?;
+    let _ = NET.set(net);
+    Ok(())
 }
 
 impl Network {
-    fn parse(bytes: &[u8]) -> Network {
+    fn parse(bytes: &[u8]) -> Result<Network, String> {
         let count = INPUTS * HIDDEN + HIDDEN + 2 * HIDDEN + 1;
         let need = count * 2;
-        assert!(
-            bytes.len() == need.next_multiple_of(64),
-            "net file is {} bytes, expected {} (wrong architecture?)",
-            bytes.len(),
-            need.next_multiple_of(64)
-        );
+        if bytes.len() != need.next_multiple_of(64) {
+            return Err(format!(
+                "net file is {} bytes, expected {} (wrong architecture?)",
+                bytes.len(),
+                need.next_multiple_of(64)
+            ));
+        }
         let mut it = bytes.chunks_exact(2).map(|c| i16::from_le_bytes([c[0], c[1]]));
         let fw: Vec<i16> = it.by_ref().take(INPUTS * HIDDEN).collect();
         let mut fb = [0i16; HIDDEN];
@@ -57,7 +74,7 @@ impl Network {
             *x = it.next().unwrap();
         }
         let ob = it.next().unwrap();
-        Network { fw, fb, ow, ob }
+        Ok(Network { fw, fb, ow, ob })
     }
 
     /// Output in centipawns from the side to move's point of view.

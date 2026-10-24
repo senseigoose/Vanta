@@ -10,7 +10,7 @@ use crate::see::see_ge;
 use crate::tt::{self, Tt};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
+use web_time::Instant;
 
 pub const MATE: i32 = 30_000;
 pub const INF: i32 = 32_000;

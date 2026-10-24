@@ -1,8 +1,9 @@
 [workspace]
 resolver = "2"
 members = ["crates/engine", "crates/uci", "crates/datagen"]
-# crates/wasm is added once it exists; it builds for wasm32 so keep it out of
-# default native builds (or add it and use `cargo build -p engine -p uci`).
+# crates/wasm is built separately for wasm32 (scripts/build-wasm.sh); it is excluded so
+# plain native builds and tests never touch it.
+exclude = ["crates/wasm"]
 
 [profile.release]
 opt-level = 3

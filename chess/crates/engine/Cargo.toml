@@ -2,4 +2,14 @@
 name = "engine"
 version = "0.1.0"
 edition = "2021"
-# No dependencies and no I/O: must stay WASM-safe.
+# No I/O: must stay WASM-safe. web-time is std::time on native and a
+# performance.now() clock on wasm32-unknown-unknown.
+
+[features]
+default = ["embedded-net"]
+# Bake nets/vanta-v4.nnue into the binary. The WASM build turns this off and
+# loads the net at runtime instead (nnue::load_network).
+embedded-net = []
+
+[dependencies]
+web-time = "1"
