@@ -2,6 +2,7 @@ import './globals.css';
 import type { ReactNode } from 'react';
 import Nav from '@/components/Nav';
 import { CURRENT_NET, VERSIONS } from '@/lib/facts';
+import { Analytics } from '@vercel/analytics/next';
 
 export const metadata = { title: 'Vanta', description: 'A chess engine you can play, analyze and inspect.' };
 
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <Nav />
           <main className="min-w-0 flex-1 p-6">{children}</main>
         </div>
+        <Analytics />
       </body>
     </html>
   );
