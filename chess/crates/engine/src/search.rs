@@ -23,9 +23,6 @@ const RFP_MAX_DEPTH: i32 = 6;
 /// Futility pruning: margin per remaining ply, and the deepest node it applies to.
 const FP_MARGIN: i32 = 100;
 const FP_MAX_DEPTH: i32 = 4;
-/// Late-move pruning: at depth <= this, quiet moves beyond 3 + depth^2 already
-/// tried are skipped in zero-window nodes.
-const LMP_MAX_DEPTH: i32 = 5;
 /// Aspiration windows: from this depth the root is searched in a narrow window
 /// around the previous score, widening on a fail low / fail high.
 const ASP_MIN_DEPTH: i32 = 5;
@@ -496,22 +493,6 @@ impl Searcher {
                 && depth <= FP_MAX_DEPTH
                 && alpha.abs() < MATE - MAX_PLY as i32
                 && static_eval + self.fp_margin * depth <= alpha
-                && !child.in_check()
-            {
-                continue;
-            }
-            // Late-move pruning: at shallow depth in a zero-window node, once enough quiet
-            // moves have been tried (the ordering says the rest are unlikely to help),
-            // skip the remaining quiet moves that do not give check. Same exclusions as
-            // futility pruning; the first move is never skipped.
-            if i > 0
-                && ply > 0
-                && is_quiet
-                && !in_check
-                && beta - alpha == 1
-                && depth <= LMP_MAX_DEPTH
-                && alpha.abs() < MATE - MAX_PLY as i32
-                && nq as i32 >= 3 + depth * depth
                 && !child.in_check()
             {
                 continue;
