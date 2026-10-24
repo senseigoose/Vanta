@@ -220,6 +220,7 @@ fn uci_loop() {
                 println!("option name FpMargin type spin default 100 min 0 max 400");
                 println!("option name SeeQs type check default true");
                 println!("option name SeeOrder type check default true");
+                println!("option name Lmp type check default false");
                 println!("uciok");
             }
             "isready" => println!("readyok"),
@@ -249,6 +250,11 @@ fn uci_loop() {
                 if t.get(2).map(|s| s.eq_ignore_ascii_case("seeorder")) == Some(true) {
                     if let Some(v) = t.get(4) {
                         searcher.set_see_order(v.eq_ignore_ascii_case("true"));
+                    }
+                }
+                if t.get(2).map(|s| s.eq_ignore_ascii_case("lmp")) == Some(true) {
+                    if let Some(v) = t.get(4) {
+                        searcher.set_lmp(v.eq_ignore_ascii_case("true"));
                     }
                 }
                 if t.get(2).map(|s| s.eq_ignore_ascii_case("hash")) == Some(true) {

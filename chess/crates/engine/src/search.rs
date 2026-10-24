@@ -24,6 +24,9 @@ const RFP_MAX_DEPTH: i32 = 6;
 /// Futility pruning: margin per remaining ply, and the deepest node it applies to.
 const FP_MARGIN: i32 = 100;
 const FP_MAX_DEPTH: i32 = 4;
+/// Late-move pruning (UCI option Lmp): at depth <= this, quiet moves beyond 3 + depth^2
+/// already tried are skipped in zero-window nodes.
+const LMP_MAX_DEPTH: i32 = 5;
 /// Aspiration windows: from this depth the root is searched in a narrow window
 /// around the previous score, widening on a fail low / fail high.
 const ASP_MIN_DEPTH: i32 = 5;
@@ -106,6 +109,8 @@ pub struct Searcher {
     see_qs: bool,
     /// Order losing captures after the quiet moves in the main search (UCI option SeeOrder).
     see_order: bool,
+    /// Late-move pruning of quiet moves (UCI option Lmp).
+    lmp: bool,
 }
 
 /// The piece type captured by `m`, if any (handles en passant).
@@ -180,6 +185,7 @@ impl Searcher {
             fp_margin: FP_MARGIN,
             see_qs: true,
             see_order: true,
+            lmp: false,
         }
     }
 
@@ -201,6 +207,10 @@ impl Searcher {
 
     pub fn set_see_order(&mut self, on: bool) {
         self.see_order = on;
+    }
+
+    pub fn set_lmp(&mut self, on: bool) {
+        self.lmp = on;
     }
 
     /// Static eval of the node at `ply` (its accumulator must be current).
@@ -512,6 +522,22 @@ impl Searcher {
                 && depth <= FP_MAX_DEPTH
                 && alpha.abs() < MATE - MAX_PLY as i32
                 && static_eval + self.fp_margin * depth <= alpha
+                && !child.in_check()
+            {
+                continue;
+            }
+            // Late-move pruning: at shallow depth in a zero-window node, once enough quiet
+            // moves have been tried, skip the remaining quiet moves that do not give check.
+            // The first move is never skipped.
+            if self.lmp
+                && i > 0
+                && ply > 0
+                && is_quiet
+                && !in_check
+                && beta - alpha == 1
+                && depth <= LMP_MAX_DEPTH
+                && alpha.abs() < MATE - MAX_PLY as i32
+                && nq as i32 >= 3 + depth * depth
                 && !child.in_check()
             {
                 continue;
