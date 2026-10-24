@@ -1,6 +1,7 @@
 import './globals.css';
 import type { ReactNode } from 'react';
 import Nav from '@/components/Nav';
+import { CURRENT_NET, VERSIONS } from '@/lib/facts';
 
 export const metadata = { title: 'Vanta', description: 'A chess engine you can play, analyze and inspect.' };
 
@@ -18,7 +19,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <span className="size-2 rounded-full bg-amber-400" />Stub engine (WASM build pending)
             </div>
           </div>
-          <span className="rounded-md border border-border px-3 py-1.5 text-sm">v0.13 · vanta-v4</span>
+          <span className="rounded-md border border-border px-3 py-1.5 text-sm">{VERSIONS[0].tag} · {CURRENT_NET}</span>
         </header>
         <div className="flex min-h-[calc(100vh-4rem)]">
           <Nav />

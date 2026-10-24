@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Dumbbell, Gauge, Network, ScrollText, Search, Swords } from 'lucide-react';
 import { SECTIONS } from '@/lib/sections';
+import { CURRENT_NET, VERSIONS } from '@/lib/facts';
 
 const ICONS = [Swords, Dumbbell, Gauge, Search, Network, ScrollText];
 
@@ -25,8 +26,8 @@ export default function Nav() {
       <div className="mt-8">
         <div className="mb-3 px-3 text-[11px] font-semibold tracking-widest text-muted-foreground">CURRENT NET</div>
         <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
-          <div>vanta-v4</div>
-          <div className="mt-1 text-xs text-muted-foreground">Engine v0.13</div>
+          <div>{CURRENT_NET}</div>
+          <div className="mt-1 text-xs text-muted-foreground">Engine {VERSIONS[0].tag}</div>
         </div>
       </div>
     </aside>

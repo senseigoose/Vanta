@@ -1,12 +1,13 @@
 // Real results from docs/results.md (all at 2+0.02, each against the previous version).
-export const VERSIONS = [
-  { tag: 'v0.13', change: 'Aspiration windows', elo: 65.6, err: 17.3, w: 369, d: 330, l: 201, status: 'Current' },
-  { tag: 'v0.12', change: 'Reverse futility pruning', elo: 73.2, err: 24.9, w: 179, d: 142, l: 93, status: 'Archived' },
-  { tag: 'v0.11', change: 'Net vanta-v4 (128M positions)', elo: 27.8, err: 16.0, w: 520, d: 355, l: 417, status: 'Archived' },
-  { tag: 'v0.10', change: 'Net vanta-v3 (88M positions)', elo: 109.1, err: 34.6, w: 182, d: 82, l: 78, status: 'Archived' },
-  { tag: 'v0.9', change: 'AVX2 build', elo: 91.9, err: 27.9, w: 153, d: 137, l: 62, status: 'Archived' },
-  { tag: 'v0.8', change: 'NNUE, net vanta-v2 (48M positions)', elo: 238.1, err: 56.1, w: 147, d: 25, l: 28, status: 'Archived' },
-];
+import data from '../data/results.json';
+
+// Results live in data/results.json, written by tools/results/log_result.py (which also appends docs/results.md).
+// Newest version first; the first one is the current version.
+export const VERSIONS = data.versions.map((v, i) => ({ ...v, status: i === 0 ? 'Current' : 'Archived' }));
+export const RATING = data.rating;
+export const ANCHOR = data.rating.levels;
+export const EXPERIMENTS = data.experiments;
+export const CURRENT_NET = 'vanta-v4'; // change by hand when a new net ships
 // Nodes to reach depth 14 from the start position (single thread).
 export const DEPTH14 = [
   { label: 'v0.11', nodes: 4.47 },
@@ -24,12 +25,7 @@ export const HISTORY = [
   { tag: 'v0.7', change: 'Mailbox board, pin-aware legality', elo: 171 },
 ];
 
-// v0.12 against Stockfish at limited strength, 10+0.1, 100 games per level (v0.11 gave about 2413 the same way).
-export const ANCHOR = [
-  { level: 2400, score: 77.5, rating: 2615, err: 86 },
-  { level: 2700, score: 47.0, rating: 2679, err: 61 },
-  { level: 3000, score: 13.0, rating: 2670, err: 94 },
-];
+
 
 // Training loss per superbatch (one pass over the data each).
 export const LOSS_V1 = [0.011449, 0.009158, 0.008731, 0.008462, 0.008276, 0.008145, 0.008045, 0.007968, 0.007905, 0.007852, 0.007806, 0.007767, 0.007733, 0.007702, 0.007675, 0.007506, 0.007488, 0.00748, 0.007475, 0.007471, 0.007467, 0.007463, 0.00746, 0.007457, 0.007454, 0.007451, 0.007448, 0.007445, 0.007442, 0.007439, 0.007417, 0.007415, 0.007415, 0.007414, 0.007414, 0.007414, 0.007413, 0.007413, 0.007413, 0.007412];
@@ -48,22 +44,4 @@ export const GAME_ENDS = [
   ['Insufficient material', 5.1, 5.7], ['Move cap', 0.3, 0.0], ['Adjudicated win', 64.1, 69.3],
 ] as const;
 
-export const EXPERIMENTS = [
-  { what: 'SEE capture ordering (losing captures after quiet moves), on top of SEE in quiescence', vs: 'c9e851d with SeeQs', elo: 43.8, err: 13.6, games: 1212, outcome: 'H1 accepted', ref: 'c9e851d' },
-  { what: 'SEE in quiescence (skip captures with SEE below 0)', vs: 'v0.13', elo: 52.6, err: 15.4, games: 1058, outcome: 'H1 accepted', ref: 'c9e851d' },
-  { what: 'Control: v0.13 against itself (meant to test late-move pruning, which was not in the build)', vs: 'v0.13', elo: 2.1, err: 6.0, games: 6000, outcome: 'Inconclusive', ref: 'ce1f75e' },
-  { what: 'v0.13 Aspiration windows', vs: 'v0.12', elo: 65.6, err: 17.3, games: 900, outcome: 'H1 accepted', ref: '2ff9f1d' },
-  { what: 'Futility margin 60 and 150 (two runs, order not recorded)', vs: 'margin 100', elo: -4.9, err: 9.4, games: 6000, outcome: 'Inconclusive', ref: 'untagged' },
-  { what: 'Futility pruning (depth ≤ 4, margin 100)', vs: 'v0.12', elo: 6.7, err: 9.6, games: 3000, outcome: 'Inconclusive', ref: 'untagged' },
-  { what: 'RFP margin 140 (UCI option)', vs: 'margin 100', elo: -6.5, err: 9.4, games: 3000, outcome: 'Inconclusive', ref: 'untagged' },
-  { what: 'RFP margin 70 (UCI option)', vs: 'margin 100', elo: 4.2, err: 9.6, games: 3000, outcome: 'Inconclusive', ref: 'untagged' },
-  { what: 'v0.12 Reverse futility pruning', vs: 'PVS commit', elo: 73.2, err: 24.9, games: 414, outcome: 'H1 accepted', ref: '0a27680' },
-  { what: 'Principal-variation search', vs: 'v0.11', elo: -3.5, err: 9.3, games: 3000, outcome: 'Inconclusive', ref: 'c77f669' },
-  { what: 'v0.11 Net vanta-v4 (128M positions)', vs: 'v0.10', elo: 27.8, err: 16.0, games: 1292, outcome: 'H1 accepted', ref: 'a8ec660' },
-  { what: 'v0.10 Net vanta-v3 (88M positions)', vs: 'v0.9', elo: 109.1, err: 34.6, games: 342, outcome: 'H1 accepted', ref: '09a3ee1' },
-  { what: 'v0.9 AVX2 build', vs: 'v0.8', elo: 91.9, err: 27.9, games: 352, outcome: 'H1 accepted', ref: '689ad30' },
-  { what: 'v0.8 NNUE, net vanta-v2 (48M positions)', vs: 'v0.7', elo: 238.1, err: 56.1, games: 200, outcome: 'H1 accepted', ref: '903779c' },
-  { what: 'Net vanta-v2 vs same build, handcrafted eval, 50,000 nodes', vs: 'handcrafted', elo: 394.9, err: 95.1, games: 166, outcome: 'H1 accepted', ref: 'diagnostic' },
-  { what: 'Net vanta-v1 vs same build, handcrafted eval, 50,000 nodes', vs: 'handcrafted', elo: -2.8, err: 11.1, games: 3000, outcome: 'Inconclusive', ref: 'diagnostic' },
-  { what: 'NNUE with net vanta-v1', vs: 'v0.7', elo: -66.9, err: 28.9, games: 468, outcome: 'H0 accepted', ref: 'untagged' },
-];
+

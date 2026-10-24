@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, FileText, Play as PlayIcon, Pause, RotateCcw
 import Board from './Board';
 import { Button, Card } from './ui';
 import { ENGINES, getEngine, type Analysis, type EngineId } from '@/lib/engine';
-import { DEPTH14, VERSIONS } from '@/lib/facts';
+import { DEPTH14, RATING, VERSIONS } from '@/lib/facts';
 
 const START = new Chess().fen();
 
@@ -247,8 +247,8 @@ export default function Play() {
         </Card>
         <Card className="p-5">
           <div className="flex items-center justify-between"><h2 className="font-semibold">Strength snapshot</h2><TrendingUp className="size-4 text-chart-2" /></div>
-          <div className="mt-4 text-4xl font-semibold">≈2,650</div>
-          <div className="mt-1 text-xs text-muted-foreground">Rating vs limited Stockfish (v0.12, rough, ±100)</div>
+          <div className="mt-4 text-4xl font-semibold">≈{(Math.round(RATING.combined.rating / 50) * 50).toLocaleString('en-US')}</div>
+          <div className="mt-1 text-xs text-muted-foreground">Rating vs limited Stockfish ({RATING.version}, rough, ±100)</div>
           <div className="mt-3 text-sm text-chart-2">+{latest.elo.toFixed(0)} Elo from {latest.tag}</div>
           <div className="mt-3 grid grid-cols-3 text-center text-xs">
             {[['Win', latest.w], ['Draw', latest.d], ['Loss', latest.l]].map(([k, n]) => (
