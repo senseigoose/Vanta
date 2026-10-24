@@ -178,8 +178,8 @@ impl Searcher {
             accs: vec![Acc::default(); MAX_PLY + 2],
             rfp_margin: RFP_MARGIN,
             fp_margin: FP_MARGIN,
-            see_qs: false,
-            see_order: false,
+            see_qs: true,
+            see_order: true,
         }
     }
 

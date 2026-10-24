@@ -218,8 +218,8 @@ fn uci_loop() {
                 println!("option name UseNNUE type check default true");
                 println!("option name RfpMargin type spin default 100 min 0 max 400");
                 println!("option name FpMargin type spin default 100 min 0 max 400");
-                println!("option name SeeQs type check default false");
-                println!("option name SeeOrder type check default false");
+                println!("option name SeeQs type check default true");
+                println!("option name SeeOrder type check default true");
                 println!("uciok");
             }
             "isready" => println!("readyok"),
