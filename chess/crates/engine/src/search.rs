@@ -23,6 +23,10 @@ const RFP_MAX_DEPTH: i32 = 6;
 /// Futility pruning: margin per remaining ply, and the deepest node it applies to.
 const FP_MARGIN: i32 = 100;
 const FP_MAX_DEPTH: i32 = 4;
+/// Aspiration windows: from this depth the root is searched in a narrow window
+/// around the previous score, widening on a fail low / fail high.
+const ASP_MIN_DEPTH: i32 = 5;
+const ASP_DELTA: i32 = 25;
 
 #[inline]
 fn hist_idx(color: usize, m: Move) -> usize {
@@ -280,7 +284,39 @@ impl Searcher {
         for depth in 1..=max_depth {
             self.root_pv = best_move;
             self.root_best = None;
-            let score = self.negamax(pos, depth, -INF, INF, 0, true);
+            let mut score;
+            if depth >= ASP_MIN_DEPTH {
+                let mut delta = ASP_DELTA;
+                let mut alpha = (best_score - delta).max(-INF);
+                let mut beta = (best_score + delta).min(INF);
+                loop {
+                    self.root_best = None;
+                    score = self.negamax(pos, depth, alpha, beta, 0, true);
+                    if self.aborted {
+                        break;
+                    }
+                    if score <= alpha {
+                        // Fail low: pull alpha down, and beta toward it.
+                        beta = (alpha + beta) / 2;
+                        alpha = (score - delta).max(-INF);
+                    } else if score >= beta {
+                        // Fail high: the move that beat beta is searched first next time.
+                        if self.root_best.is_some() {
+                            self.root_pv = self.root_best;
+                        }
+                        beta = (score + delta).min(INF);
+                    } else {
+                        break;
+                    }
+                    delta += delta / 2;
+                    if delta > 800 {
+                        alpha = -INF;
+                        beta = INF;
+                    }
+                }
+            } else {
+                score = self.negamax(pos, depth, -INF, INF, 0, true);
+            }
             if self.aborted {
                 break;
             }
