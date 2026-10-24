@@ -27,3 +27,4 @@
 | 2026-10-24 | SEE in quiescence (SeeQs: skip captures with SEE < 0; commit c9e851d, option, default off at the time) | v0.13 | TC 2+0.02, [0,5] | H1 accepted, LLR 2.95, +52.6 ± 15.4 Elo, 1058 games; much larger than expected |
 | 2026-10-24 | SEE capture ordering (SeeOrder: losing captures after quiets; commit c9e851d, on top of SeeQs) | c9e851d with SeeQs | TC 2+0.02, [0,5] | H1 accepted, LLR 2.94, +43.8 ± 13.6 Elo, 1212 games; gains need not be additive, see the combined run |
 | 2026-10-24 | Control: v0.13 code vs itself (LMP patch was never committed on its own; it was swept into 7aa0d89 and reverted in 2cf0a0b) | v0.13 | TC 2+0.02, [0,5] | already logged above; late-move pruning remains untested |
+| 2026-10-24 | Static exchange evaluation on by default (SeeQs + SeeOrder) (built from 1eb6050) | v0.13 | TC 2+0.02, [0.00, 5.00] | H1 accepted, LLR 2.95, +101.6 ± 21.1 Elo, 626 games; confirms the two component runs, +52.6 and +43.8 |

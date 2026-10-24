@@ -1,6 +1,15 @@
 {
   "versions": [
     {
+      "tag": "v0.14",
+      "change": "Static exchange evaluation (SEE)",
+      "elo": 101.59,
+      "err": 21.1,
+      "w": 278,
+      "d": 248,
+      "l": 100
+    },
+    {
       "tag": "v0.13",
       "change": "Aspiration windows",
       "elo": 65.6,
@@ -56,6 +65,15 @@
     }
   ],
   "experiments": [
+    {
+      "what": "Static exchange evaluation on by default (SeeQs + SeeOrder)",
+      "vs": "v0.13",
+      "elo": 101.59,
+      "err": 21.1,
+      "games": 626,
+      "outcome": "H1 accepted",
+      "ref": "1eb6050"
+    },
     {
       "what": "SEE capture ordering (losing captures after quiet moves), on top of SEE in quiescence",
       "vs": "c9e851d with SeeQs",
