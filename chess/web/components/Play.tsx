@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Chess } from 'chess.js';
+import Link from 'next/link';
 import type { Key } from 'chessground/types';
 import { ChevronLeft, ChevronRight, FileText, Play as PlayIcon, Pause, RotateCcw, SkipBack, SkipForward, Terminal, TrendingUp, Upload, Zap } from 'lucide-react';
 import Board from './Board';
@@ -138,7 +139,7 @@ export default function Play() {
               <button key={k} role="tab" aria-selected={mode === k} onClick={() => setMode(k)}
                 className={`h-7 rounded px-3 ${mode === k ? 'bg-card shadow-sm' : 'text-muted-foreground'}`}>{label}</button>
             ))}
-            <button role="tab" disabled title="Needs the WASM engine" className="h-7 rounded px-3 text-muted-foreground opacity-50">Engine vs engine</button>
+            <Link href="/match" role="tab" aria-selected={false} className="inline-flex h-7 items-center rounded px-3 text-muted-foreground hover:text-foreground">Engine vs engine</Link>
           </div>
         </div>
 
