@@ -1,11 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Dumbbell, Gauge, Network, ScrollText, Search, Swords } from 'lucide-react';
+import { Dumbbell, Gauge, Network, ScrollText, Search, Swords, Trophy } from 'lucide-react';
 import { SECTIONS } from '@/lib/sections';
 import { CURRENT_NET, VERSIONS } from '@/lib/facts';
 
-const ICONS = [Swords, Dumbbell, Gauge, Search, Network, ScrollText];
+const ICONS = [Swords, Trophy, Dumbbell, Gauge, Search, Network, ScrollText];
 
 export default function Nav() {
   const path = usePathname();
