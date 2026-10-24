@@ -19,8 +19,8 @@ export default function Page() {
         <Table heads={['Version', 'Change', 'Elo vs previous', 'Win / draw / loss']} rows={VERSIONS.map((v) => [v.tag, v.change, `+${v.elo.toFixed(1)} ± ${v.err.toFixed(1)}`, `${v.w} / ${v.d} / ${v.l}`])} />
       </Card>
       <Card className="overflow-hidden">
-        <h2 className="border-b border-border px-5 pt-4 text-sm font-semibold">Rating anchor: v0.11 against limited Stockfish</h2>
-        <p className="px-5 pb-4 pt-1 text-xs text-muted-foreground">10+0.1, 100 games per level. Roughly 2,400 on Stockfish’s own scale, give or take 100. Levels where Vanta scored under 15% are unreliable.</p>
+        <h2 className="border-b border-border px-5 pt-4 text-sm font-semibold">Rating anchor: v0.12 against limited Stockfish</h2>
+        <p className="px-5 pb-4 pt-1 text-xs text-muted-foreground">10+0.1, 100 games per level. Roughly 2,650 on Stockfish’s own scale, give or take 100 (v0.11 measured about 2,400 the same way). Levels where Vanta scored under 15% are unreliable.</p>
         <Table heads={['Stockfish level', 'Vanta score', 'Implied rating']} rows={ANCHOR.map((a) => [a.level, `${a.score}%`, `${a.rating} ± ${a.err}`])} />
       </Card>
       <p className="text-xs text-muted-foreground">Results by colour, opening and game phase, and puzzle accuracy, need the game files and a puzzle set. Not built yet.</p>

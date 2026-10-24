@@ -26,7 +26,7 @@ export default function Nav() {
         <div className="mb-3 px-3 text-[11px] font-semibold tracking-widest text-muted-foreground">CURRENT NET</div>
         <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm">
           <div>vanta-v4</div>
-          <div className="mt-1 text-xs text-muted-foreground">Engine v0.12</div>
+          <div className="mt-1 text-xs text-muted-foreground">Engine v0.13</div>
         </div>
       </div>
     </aside>
